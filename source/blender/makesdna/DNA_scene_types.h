@@ -1334,6 +1334,14 @@ typedef struct MeshStatVis {
 typedef struct SequencerToolSettings {
   /* eSeqImageFitMethod */
   int fit_method;
+  /*eSeqTransformFlag */
+  int transform_flag;
+  /** When there are many snap points, 0-1 range corresponds to resolution from boundbox to all
+   * possible snap points. */
+  int snap_sdensity;
+  int snap_threshold;
+  int snap_source;
+  int snap_side;
 } SequencerToolSettings;
 
 typedef enum eSeqImageFitMethod {
@@ -1342,6 +1350,27 @@ typedef enum eSeqImageFitMethod {
   SEQ_STRETCH_TO_FILL,
   SEQ_USE_ORIGINAL_SIZE,
 } eSeqImageFitMethod;
+
+typedef enum eSeqTransformFlag {
+  SEQ_USE_SNAPPING = (1 << 0),
+  /* Snap targets. */
+  SEQ_SNAP_TO_STRIP_START = (1 << 1),
+  SEQ_SNAP_TO_STRIP_END = (1 << 2),
+  SEQ_SNAP_TO_PLAYHEAD = (1 << 3),
+  SEQ_SNAP_IGNORE_MUTED = (1 << 4),
+  SEQ_SNAP_IGNORE_SOUND = (1 << 5),
+
+  /* Snap sources. */
+  SEQ_SNAP_EACH_STRIP = (1 << 6),
+  SEQ_SNAP_SELECTION = (1 << 7),
+
+  /* Snap source side. */
+  SEQ_SNAP_SOURCE_LEFT = (1 << 8),
+  SEQ_SNAP_SOURCE_RIGHT = (1 << 9),
+  SEQ_SNAP_SOURCE_BOTH = (1 << 10),
+  SEQ_SNAP_SOURCE_MOUSE = (1 << 11),
+
+} eSeqTransformFlag;
 
 /* *************************************************************** */
 /* Tool Settings */

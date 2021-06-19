@@ -63,9 +63,7 @@ typedef struct TransDataSeq {
  */
 typedef struct TransSeq {
   TransDataSeq *tdseq;
-  int min;
-  int max;
-  bool snap_left;
+  struct TransSeqSnapData *snap_data;
   int selection_channel_range_min;
   int selection_channel_range_max;
 } TransSeq;
@@ -254,38 +252,7 @@ static int SeqToTransData_build(
 
 static void SeqTransDataBounds(TransInfo *t, ListBase *seqbase, TransSeq *ts)
 {
-  Sequence *seq;
-  int count, flag;
-  int max = INT32_MIN, min = INT32_MAX;
-
-  for (seq = seqbase->first; seq; seq = seq->next) {
-
-    /* just to get the flag since there are corner cases where this isn't totally obvious */
-    SeqTransInfo(t, seq, &count, &flag);
-
-    /* use 'flag' which is derived from seq->flag but modified for special cases */
-    if (flag & SELECT) {
-      if (flag & (SEQ_LEFTSEL | SEQ_RIGHTSEL)) {
-        if (flag & SEQ_LEFTSEL) {
-          min = min_ii(seq->startdisp, min);
-          max = max_ii(seq->startdisp, max);
-        }
-        if (flag & SEQ_RIGHTSEL) {
-          min = min_ii(seq->enddisp, min);
-          max = max_ii(seq->enddisp, max);
-        }
-      }
-      else {
-        min = min_ii(seq->startdisp, min);
-        max = max_ii(seq->enddisp, max);
-      }
-    }
-  }
-
-  if (ts) {
-    ts->max = max;
-    ts->min = min;
-  }
+  ts->snap_data = seq_snap_data_alloc(t, seqbase);
 }
 
 static void free_transform_custom_data(TransCustomData *custom_data)
@@ -293,6 +260,7 @@ static void free_transform_custom_data(TransCustomData *custom_data)
   if ((custom_data->data != NULL) && custom_data->use_free) {
     TransSeq *ts = custom_data->data;
     MEM_freeN(ts->tdseq);
+    seq_snap_data_free(ts->snap_data);
     MEM_freeN(custom_data->data);
     custom_data->data = NULL;
   }
@@ -355,7 +323,7 @@ static void seq_transform_update_effects(TransInfo *t, SeqCollection *collection
   Sequence *seq;
   SEQ_ITERATOR_FOREACH (seq, collection) {
     if ((seq->type & SEQ_TYPE_EFFECT) && (seq->seq1 || seq->seq2 || seq->seq3)) {
-        SEQ_time_update_sequence(t->scene, seq);
+      SEQ_time_update_sequence(t->scene, seq);
     }
   }
 }
@@ -544,15 +512,8 @@ void createTransSeqData(TransInfo *t)
 
   /* loop 2: build transdata array */
   SeqToTransData_build(t, ed->seqbasep, td, td2d, tdsq);
-  SeqTransDataBounds(t, ed->seqbasep, ts);
-
-  if (t->flag & T_MODAL) {
-    /* set the snap mode based on how close the mouse is at the end/start points */
-    int xmouse = (int)UI_view2d_region_to_view_x((View2D *)t->view, t->mouse.imval[0]);
-    if (abs(xmouse - ts->max) > abs(xmouse - ts->min)) {
-      ts->snap_left = true;
-    }
-  }
+  /* Snapping data. */
+  ts->snap_data = seq_snap_data_alloc(t, ed->seqbasep);
 
   ts->selection_channel_range_min = MAXSEQ + 1;
   LISTBASE_FOREACH (Sequence *, seq, SEQ_active_seqbase_get(ed)) {
@@ -734,10 +695,10 @@ void transform_convert_sequencer_channel_clamp(TransInfo *t)
   }
 }
 
-int transform_convert_sequencer_get_snap_bound(TransInfo *t)
+struct TransSeqSnapData *transform_convert_sequencer_get_snap_data(TransInfo *t)
 {
   TransSeq *ts = TRANS_DATA_CONTAINER_FIRST_SINGLE(t)->custom.type.data;
-  return ts->snap_left ? ts->min : ts->max;
+  return ts->snap_data;
 }
 
 /** \} */

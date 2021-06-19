@@ -107,7 +107,7 @@ static void applySeqSlide(TransInfo *t, const int mval[2])
   char str[UI_MAX_DRAW_STR];
   float values_final[3] = {0.0f};
 
-  snapSequenceBounds(t, mval);
+  seq_snap_offset_apply(t, mval);
   transform_convert_sequencer_channel_clamp(t);
   if (applyNumInput(&t->num, values_final)) {
     if (t->con.mode & CON_APPLY) {

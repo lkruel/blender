@@ -41,6 +41,7 @@
 
 #include "RNA_access.h"
 
+#include "SEQ_iterator.h"
 #include "SEQ_sequencer.h"
 #include "SEQ_time.h"
 
@@ -190,7 +191,7 @@ void drawSnapping(const struct bContext *C, TransInfo *t)
 
       RegionView3D *rv3d = CTX_wm_region_view3d(C);
       if (!BLI_listbase_is_empty(&t->tsnap.points)) {
-        /* Draw snap points. */
+        /* Draw snap source_points. */
 
         float size = 2.0f * UI_GetThemeValuef(TH_VERTEX_SIZE);
         float view_inv[4][4];
@@ -739,7 +740,7 @@ static void setSnappingCallback(TransInfo *t)
 
 void addSnapPoint(TransInfo *t)
 {
-  /* Currently only 3D viewport works for snapping points. */
+  /* Currently only 3D viewport works for snapping source_points. */
   if (t->tsnap.status & POINT_INIT && t->spacetype == SPACE_VIEW3D) {
     TransSnapPoint *p = MEM_callocN(sizeof(TransSnapPoint), "SnapPoint");
 
@@ -1428,28 +1429,6 @@ void snapFrameTransform(TransInfo *t,
     }
   }
   *r_val = (float)val;
-}
-
-/*================================================================*/
-
-void snapSequenceBounds(TransInfo *t, const int mval[2])
-{
-  /* Reuse increment, strictly speaking could be another snap mode, but leave as is. */
-  if (!(t->modifiers & MOD_SNAP_INVERT)) {
-    return;
-  }
-
-  /* Convert to frame range. */
-  float xmouse, ymouse;
-  UI_view2d_region_to_view(&t->region->v2d, mval[0], mval[1], &xmouse, &ymouse);
-  const int frame_curr = round_fl_to_int(xmouse);
-
-  /* Now find the closest sequence. */
-  const int frame_near = SEQ_time_find_next_prev_edit(
-      t->scene, frame_curr, SEQ_SIDE_BOTH, true, false, true);
-
-  const int frame_snap = transform_convert_sequencer_get_snap_bound(t);
-  t->values[0] = frame_near - frame_snap;
 }
 
 static void snap_grid_apply(

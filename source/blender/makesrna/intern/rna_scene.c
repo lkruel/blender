@@ -3501,13 +3501,93 @@ static void rna_def_sequencer_tool_settings(BlenderRNA *brna)
       {0, NULL, 0, NULL, NULL},
   };
 
+  static const EnumPropertyItem snap_sources[] = {
+      {SEQ_SNAP_EACH_STRIP,
+       "EACH_STRIP",
+       0,
+       "Each Strip",
+       "Snap each strip that is being transformed"},
+      {SEQ_SNAP_SELECTION,
+       "SELECTION",
+       0,
+       "Selection",
+       "Snap only start or end of whole selection"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  static const EnumPropertyItem snap_sides[] = {
+      {SEQ_SNAP_SOURCE_LEFT, "LEFT", 0, "Left", "Snap only source start"},
+      {SEQ_SNAP_SOURCE_RIGHT, "RIGHT", 0, "Right", "Snap only source end"},
+      {SEQ_SNAP_SOURCE_BOTH, "BOTH", 0, "Both", "Snap both sides"},
+      {SEQ_SNAP_SOURCE_MOUSE,
+       "MOUSE",
+       0,
+       "Use Mouse Position",
+       "Use mouse cursor position to determine side to snap"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
   srna = RNA_def_struct(brna, "SequencerToolSettings", NULL);
   RNA_def_struct_path_func(srna, "rna_SequencerToolSettings_path");
   RNA_def_struct_ui_text(srna, "Sequencer Tool Settings", "");
 
+  /* Add strip settings. */
   prop = RNA_def_property(srna, "fit_method", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, scale_fit_methods);
   RNA_def_property_ui_text(prop, "Fit Method", "Scale fit method");
+
+  /* Transform snapping. */
+  prop = RNA_def_property(srna, "use_snapping", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "transform_flag", SEQ_USE_SNAPPING);
+  RNA_def_property_boolean_default(prop, true);
+  RNA_def_property_ui_icon(prop, ICON_SNAP_OFF, 1);
+  RNA_def_property_ui_text(prop, "Use Snapping", "Snap to strip edges or current frame");
+
+  prop = RNA_def_property(srna, "snap_to_strip_start", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "transform_flag", SEQ_SNAP_TO_STRIP_START);
+  RNA_def_property_boolean_default(prop, true);
+  RNA_def_property_ui_text(prop, "Strip to Start", "Snap to beginning of strips");
+
+  prop = RNA_def_property(srna, "snap_to_strip_end", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "transform_flag", SEQ_SNAP_TO_STRIP_END);
+  RNA_def_property_boolean_default(prop, true);
+  RNA_def_property_ui_text(prop, "Snap to End", "Snap to end of strips");
+
+  prop = RNA_def_property(srna, "snap_to_playhead", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "transform_flag", SEQ_SNAP_TO_PLAYHEAD);
+  RNA_def_property_boolean_default(prop, true);
+  RNA_def_property_ui_text(prop, "Snap to Playhead", "Snap to current frame");
+
+  prop = RNA_def_property(srna, "snap_ignore_muted", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "transform_flag", SEQ_SNAP_IGNORE_MUTED);
+  RNA_def_property_boolean_default(prop, true);
+  RNA_def_property_ui_text(prop, "Ignore Muted Strips", "Don't snap to hidden strips");
+
+  prop = RNA_def_property(srna, "snap_ignore_sound", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "transform_flag", SEQ_SNAP_IGNORE_SOUND);
+  RNA_def_property_boolean_default(prop, true);
+  RNA_def_property_ui_text(prop, "Ignore Sound Strips", "Don't snap to sound strips");
+
+  prop = RNA_def_property(srna, "snap_threshold", PROP_INT, PROP_PIXEL);
+  RNA_def_property_int_sdna(prop, NULL, "snap_threshold");
+  RNA_def_property_int_default(prop, 25);
+  RNA_def_property_ui_range(prop, 0, 50, 1, 1);
+  RNA_def_property_ui_text(prop, "Snapping Threshold", "Maximum distance for snapping in pixels");
+
+  /*  prop = RNA_def_property(srna, "snap_density", PROP_INT, PROP_NONE);
+    RNA_def_property_int_sdna(prop, NULL, "snap_density");
+    RNA_def_property_int_default(prop, 10);
+    RNA_def_property_ui_range(prop, 0, 50, 1, 1);
+    RNA_def_property_ui_text(
+        prop, "Maximum snap point density", "Maximum number of snap points per 100 pixels");*/
+
+  prop = RNA_def_property(srna, "snap_source", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, snap_sources);
+  RNA_def_property_ui_text(prop, "Source", "What is to be snapped");
+
+  prop = RNA_def_property(srna, "snap_side", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, snap_sides);
+  RNA_def_property_ui_text(prop, "Side", "Side of source to be snapped");
 }
 
 static void rna_def_unified_paint_settings(BlenderRNA *brna)

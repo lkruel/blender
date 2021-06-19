@@ -32,6 +32,7 @@ struct ListBase;
 struct Object;
 struct TransData;
 struct TransDataCurveHandleFlags;
+struct TransSeqSnapData;
 struct TransInfo;
 struct bContext;
 
@@ -47,9 +48,14 @@ void clipUVData(TransInfo *t);
 /* transform_convert_mesh.c */
 void transform_convert_mesh_customdatacorrect_init(TransInfo *t);
 
+/* transform_snap_sequencer.c */
+struct TransSeqSnapData *seq_snap_data_alloc(TransInfo *t, struct ListBase *seqbase);
+void seq_snap_data_free(struct TransSeqSnapData *data);
+
 /* transform_convert_sequencer.c */
-int transform_convert_sequencer_get_snap_bound(TransInfo *t);
+struct TransSeqSnapData *transform_convert_sequencer_get_snap_data(TransInfo *t);
 void transform_convert_sequencer_channel_clamp(TransInfo *t);
+
 /********************* intern **********************/
 
 /* transform_convert.c */
