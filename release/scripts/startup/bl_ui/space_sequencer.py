@@ -2286,6 +2286,7 @@ class SEQUENCER_PT_snapping(Panel):
         col.label(text="Snap To")
         col.prop(tool_settings, "snap_to_strip_start")
         col.prop(tool_settings, "snap_to_strip_end")
+        col.prop(tool_settings, "snap_to_strip_hold_offset")
         col.prop(tool_settings, "snap_to_playhead")
         col.separator()
         col.prop(tool_settings, "snap_ignore_muted")
@@ -2299,7 +2300,7 @@ class SEQUENCER_PT_snapping(Panel):
 
         col.label(text="Snap Settings")
         col.prop(tool_settings, "snap_threshold", slider=True)
-        col.prop(tool_settings, "snap_sensitivity", slider=True)
+        #col.prop(tool_settings, "snap_sensitivity", slider=True)
         col.separator()
 
 

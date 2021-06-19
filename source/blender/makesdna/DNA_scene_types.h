@@ -1357,6 +1357,7 @@ typedef enum eSeqTransformFlag {
   SEQ_SNAP_TO_STRIP_START = (1 << 1),
   SEQ_SNAP_TO_STRIP_END = (1 << 2),
   SEQ_SNAP_TO_PLAYHEAD = (1 << 3),
+  SEQ_SNAP_TO_STRIP_HOLD = (1 << 12),
   SEQ_SNAP_IGNORE_MUTED = (1 << 4),
   SEQ_SNAP_IGNORE_SOUND = (1 << 5),
 

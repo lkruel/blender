@@ -216,6 +216,9 @@ static int seq_get_snap_target_points_count(TransInfo *t,
   if (tool_settings->transform_flag & SEQ_SNAP_TO_STRIP_END) {
     count++;
   }
+  if (tool_settings->transform_flag & SEQ_SNAP_TO_STRIP_HOLD) {
+    count += 2;
+  }
 
   count *= SEQ_collection_count(snap_targets);
 
@@ -259,6 +262,13 @@ static void seq_snap_target_points_build(TransInfo *t,
     if (tool_settings->transform_flag & SEQ_SNAP_TO_STRIP_END) {
       snap_data->target_snap_points[i] = seq->enddisp;
       i++;
+    }
+    if (tool_settings->transform_flag & SEQ_SNAP_TO_STRIP_HOLD) {
+      const int content_start = min_ii(seq->enddisp, seq->start);
+      const int content_end = max_ii(seq->startdisp, seq->start + seq->len);
+      snap_data->target_snap_points[i] = content_start;
+      snap_data->target_snap_points[i + 1] = content_end;
+      i += 2;
     }
   }
   BLI_assert(i <= snap_data->target_snap_point_count);

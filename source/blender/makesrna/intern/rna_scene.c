@@ -3553,6 +3553,11 @@ static void rna_def_sequencer_tool_settings(BlenderRNA *brna)
   RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop, "Snap to End", "Snap to end of strips");
 
+  prop = RNA_def_property(srna, "snap_to_strip_hold_offset", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "transform_flag", SEQ_SNAP_TO_STRIP_HOLD);
+  RNA_def_property_boolean_default(prop, true);
+  RNA_def_property_ui_text(prop, "Snap to Hold Offset", "Snap to strip hold offset");
+
   prop = RNA_def_property(srna, "snap_to_playhead", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "transform_flag", SEQ_SNAP_TO_PLAYHEAD);
   RNA_def_property_boolean_default(prop, true);
