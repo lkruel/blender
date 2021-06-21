@@ -1334,11 +1334,11 @@ typedef struct MeshStatVis {
 typedef struct SequencerToolSettings {
   /* eSeqImageFitMethod */
   int fit_method;
-  /*eSeqTransformFlag */
-  int transform_flag;
+  /*eSeqSnapFlag */
+  int snap_flag;
   /** When there are many snap points, 0-1 range corresponds to resolution from boundbox to all
    * possible snap points. */
-  int snap_sdensity;
+  int snap_density;
   int snap_threshold;
   int snap_source;
   int snap_side;
@@ -1351,7 +1351,7 @@ typedef enum eSeqImageFitMethod {
   SEQ_USE_ORIGINAL_SIZE,
 } eSeqImageFitMethod;
 
-typedef enum eSeqTransformFlag {
+typedef enum eSeqSnapFlag {
   SEQ_USE_SNAPPING = (1 << 0),
   /* Snap targets. */
   SEQ_SNAP_TO_STRIP_START = (1 << 1),
@@ -1366,12 +1366,12 @@ typedef enum eSeqTransformFlag {
   SEQ_SNAP_SELECTION = (1 << 7),
 
   /* Snap source side. */
-  SEQ_SNAP_SOURCE_LEFT = (1 << 8),
-  SEQ_SNAP_SOURCE_RIGHT = (1 << 9),
-  SEQ_SNAP_SOURCE_BOTH = (1 << 10),
-  SEQ_SNAP_SOURCE_MOUSE = (1 << 11),
+  SEQ_SNAP_SOURCE_SIDE_LEFT = (1 << 8),
+  SEQ_SNAP_SOURCE_SIDE_RIGHT = (1 << 9),
+  SEQ_SNAP_SOURCE_SIDE_BOTH = (1 << 10),
+  SEQ_SNAP_SOURCE_SIDE_MOUSE = (1 << 11),
 
-} eSeqTransformFlag;
+} eSeqSnapFlag;
 
 /* *************************************************************** */
 /* Tool Settings */
@@ -2041,7 +2041,7 @@ extern const char *RE_engine_id_CYCLES;
 
 /* Base.flag is in DNA_object_types.h */
 
-/** #ToolSettings.transform_flag */
+/** #ToolSettings.snap_flag */
 enum {
   SCE_XFORM_AXIS_ALIGN = (1 << 0),
   SCE_XFORM_DATA_ORIGIN = (1 << 1),

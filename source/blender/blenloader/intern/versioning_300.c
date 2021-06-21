@@ -42,6 +42,8 @@
 #include "BLO_readfile.h"
 #include "readfile.h"
 
+#include "SEQ_sequencer.h"
+
 #include "MEM_guardedalloc.h"
 
 #include "versioning_common.h"
@@ -403,5 +405,14 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
    */
   {
     /* Keep this block, even when empty. */
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      SequencerToolSettings *tool_settings = SEQ_tool_settings_ensure(scene);
+      tool_settings->snap_flag = SEQ_SNAP_TO_STRIP_START | SEQ_SNAP_TO_STRIP_END |
+                                 SEQ_SNAP_TO_PLAYHEAD | SEQ_SNAP_TO_STRIP_HOLD |
+                                 SEQ_SNAP_IGNORE_MUTED;
+      tool_settings->snap_source = SEQ_SNAP_EACH_STRIP;
+      tool_settings->snap_side = SEQ_SNAP_SOURCE_SIDE_BOTH;
+      tool_settings->snap_threshold = 25;
+    }
   }
 }

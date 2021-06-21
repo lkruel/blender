@@ -53,18 +53,18 @@ typedef struct TransSeqSnapData {
   int *target_snap_points;
   int target_snap_point_count;
 
-  eSeqTransformFlag snap_side;
+  eSeqSnapFlag snap_side;
 } TransSeqSnapData;
 
 /* -------------------------------------------------------------------- */
 /** \name Snap sources
  * \{ */
 
-static eSeqTransformFlag seq_snap_source_side_get(TransInfo *t, SeqCollection *snap_sources)
+static eSeqSnapFlag seq_snap_source_side_get(TransInfo *t, SeqCollection *snap_sources)
 {
   SequencerToolSettings *tool_settings = SEQ_tool_settings_ensure(t->scene);
 
-  if ((tool_settings->snap_side & SEQ_SNAP_SOURCE_MOUSE) == 0) {
+  if ((tool_settings->snap_side & SEQ_SNAP_SOURCE_SIDE_MOUSE) == 0) {
     return tool_settings->snap_side;
   }
 
@@ -82,9 +82,9 @@ static eSeqTransformFlag seq_snap_source_side_get(TransInfo *t, SeqCollection *s
   /* Set the snap mode based on how close the mouse is at the end/start source_snap_points. */
   int xmouse = (int)UI_view2d_region_to_view_x((View2D *)t->view, t->mouse.imval[0]);
   if (abs(xmouse - boundbox_max) > abs(xmouse - boundbox_min)) {
-    return SEQ_SNAP_SOURCE_LEFT;
+    return SEQ_SNAP_SOURCE_SIDE_LEFT;
   }
-  return SEQ_SNAP_SOURCE_RIGHT;
+  return SEQ_SNAP_SOURCE_SIDE_RIGHT;
 }
 
 static int seq_get_snap_source_points_count(TransInfo *t,
@@ -98,7 +98,7 @@ static int seq_get_snap_source_points_count(TransInfo *t,
     count = SEQ_collection_count(snap_sources);
   }
 
-  if (snap_data->snap_side == SEQ_SNAP_SOURCE_BOTH) {
+  if (snap_data->snap_side == SEQ_SNAP_SOURCE_SIDE_BOTH) {
     count *= 2;
   }
   return count;
@@ -128,11 +128,11 @@ static void seq_snap_source_points_build_set_min_max(
     max = snap_data->source_point_max;
   }
 
-  if (snap_data->snap_side & (SEQ_SNAP_SOURCE_LEFT | SEQ_SNAP_SOURCE_BOTH)) {
+  if (snap_data->snap_side & (SEQ_SNAP_SOURCE_SIDE_LEFT | SEQ_SNAP_SOURCE_SIDE_BOTH)) {
     snap_data->source_snap_points[*r_i] = left;
     *r_i += 1;
   }
-  if (snap_data->snap_side & (SEQ_SNAP_SOURCE_RIGHT | SEQ_SNAP_SOURCE_BOTH)) {
+  if (snap_data->snap_side & (SEQ_SNAP_SOURCE_SIDE_RIGHT | SEQ_SNAP_SOURCE_SIDE_BOTH)) {
     snap_data->source_snap_points[*r_i] = right;
     *r_i += 1;
   }
@@ -191,11 +191,10 @@ static SeqCollection *query_snap_targets(const TransInfo *t)
     if ((seq->flag & SELECT)) {
       continue; /* Selected are being transformed. */
     }
-    if ((seq->flag & SEQ_MUTE) && (tool_settings->transform_flag & SEQ_SNAP_IGNORE_MUTED)) {
+    if ((seq->flag & SEQ_MUTE) && (tool_settings->snap_flag & SEQ_SNAP_IGNORE_MUTED)) {
       continue;
     }
-    if (seq->type == SEQ_TYPE_SOUND_RAM &&
-        (tool_settings->transform_flag & SEQ_SNAP_IGNORE_SOUND)) {
+    if (seq->type == SEQ_TYPE_SOUND_RAM && (tool_settings->snap_flag & SEQ_SNAP_IGNORE_SOUND)) {
       continue;
     }
     SEQ_collection_append_strip(seq, collection);
@@ -210,19 +209,19 @@ static int seq_get_snap_target_points_count(TransInfo *t,
   SequencerToolSettings *tool_settings = SEQ_tool_settings_ensure(t->scene);
 
   int count = 0; /* in case of SEQ_SNAP_SELECTION */
-  if (tool_settings->transform_flag & SEQ_SNAP_TO_STRIP_START) {
+  if (tool_settings->snap_flag & SEQ_SNAP_TO_STRIP_START) {
     count++;
   }
-  if (tool_settings->transform_flag & SEQ_SNAP_TO_STRIP_END) {
+  if (tool_settings->snap_flag & SEQ_SNAP_TO_STRIP_END) {
     count++;
   }
-  if (tool_settings->transform_flag & SEQ_SNAP_TO_STRIP_HOLD) {
+  if (tool_settings->snap_flag & SEQ_SNAP_TO_STRIP_HOLD) {
     count += 2;
   }
 
   count *= SEQ_collection_count(snap_targets);
 
-  if (tool_settings->transform_flag & SEQ_SNAP_TO_PLAYHEAD) {
+  if (tool_settings->snap_flag & SEQ_SNAP_TO_PLAYHEAD) {
     count++;
   }
 
@@ -248,24 +247,30 @@ static void seq_snap_target_points_build(TransInfo *t,
 
   int i = 0;
 
-  if (tool_settings->transform_flag & SEQ_SNAP_TO_PLAYHEAD) {
+  if (tool_settings->snap_flag & SEQ_SNAP_TO_PLAYHEAD) {
     snap_data->target_snap_points[i] = CFRA;
     i++;
   }
 
   Sequence *seq;
   SEQ_ITERATOR_FOREACH (seq, snap_targets) {
-    if (tool_settings->transform_flag & SEQ_SNAP_TO_STRIP_START) {
+    if (tool_settings->snap_flag & SEQ_SNAP_TO_STRIP_START) {
       snap_data->target_snap_points[i] = seq->startdisp;
       i++;
     }
-    if (tool_settings->transform_flag & SEQ_SNAP_TO_STRIP_END) {
+    if (tool_settings->snap_flag & SEQ_SNAP_TO_STRIP_END) {
       snap_data->target_snap_points[i] = seq->enddisp;
       i++;
     }
-    if (tool_settings->transform_flag & SEQ_SNAP_TO_STRIP_HOLD) {
-      const int content_start = min_ii(seq->enddisp, seq->start);
-      const int content_end = max_ii(seq->startdisp, seq->start + seq->len);
+    if (tool_settings->snap_flag & SEQ_SNAP_TO_STRIP_HOLD) {
+      int content_start = min_ii(seq->enddisp, seq->start);
+      int content_end = max_ii(seq->startdisp, seq->start + seq->len);
+      if (seq->anim_startofs == 0) {
+        content_start = seq->startdisp;
+      }
+      if (seq->anim_endofs == 0) {
+        content_end = seq->enddisp;
+      }
       snap_data->target_snap_points[i] = content_start;
       snap_data->target_snap_points[i + 1] = content_end;
       i += 2;
@@ -288,7 +293,7 @@ static bool seq_snap_use_snapping(const TransInfo *t)
   }
 
   SequencerToolSettings *tool_settings = SEQ_tool_settings_ensure(t->scene);
-  return (bool)(tool_settings->transform_flag & SEQ_USE_SNAPPING) ^
+  return (bool)(tool_settings->snap_flag & SEQ_USE_SNAPPING) ^
          (bool)(t->modifiers & MOD_SNAP_INVERT);
 }
 
