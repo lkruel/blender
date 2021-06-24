@@ -62,6 +62,7 @@ jobs:
       - name: setup git
         uses: oleksiyrudenko/gha-git-credentials@v2-latest
         with:
+          global: true
           token: '${{ secrets.USER_TOKEN }}'
 
       - name: submodules and libraries update
