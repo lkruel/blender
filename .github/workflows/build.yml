@@ -28,7 +28,7 @@ jobs:
         env:
           cache-name: ${{ github.ref }}-${{ runner.os }}
         with:
-          path: ${{ env.GITHUB_WORKSPACE }}
+          path: ${{ github.workspace }}
           key: build-cache-${{ env.cache-name }}
             
       - uses: actions/checkout@v2
