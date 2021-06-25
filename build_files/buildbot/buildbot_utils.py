@@ -82,7 +82,7 @@ class VersionInfo:
         version_number = int(self._parse_header_file(blender_h, 'BLENDER_VERSION'))
         version_number_patch = int(self._parse_header_file(blender_h, 'BLENDER_VERSION_PATCH'))
         version_numbers = (version_number // 100, version_number % 100, version_number_patch)
-        self.short_version = "%d.%02d" % (version_numbers[0], version_numbers[1])
+        self.short_version = "%d.%02g" % (version_numbers[0], version_numbers[1])
         self.version = "%d.%02d.%d" % version_numbers
         self.version_cycle = self._parse_header_file(blender_h, 'BLENDER_VERSION_CYCLE')
         self.version_cycle_number = self._parse_header_file(blender_h, 'BLENDER_VERSION_CYCLE_NUMBER')
