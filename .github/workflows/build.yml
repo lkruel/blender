@@ -78,6 +78,7 @@ jobs:
         run: python ../blender.git/build_files/buildbot/worker_compile.py ${{ matrix.builder }} ${{ matrix.branch }}
 
       - name: test
+        continue-on-error: true
         working-directory: C:/blender-git/build
         run: python ../blender.git/build_files/buildbot/worker_test.py ${{ matrix.builder }} ${{ matrix.branch }}
 
