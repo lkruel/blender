@@ -103,17 +103,6 @@ typedef struct SequenceSearchData {
   SequenceModifierData *smd;
 } SequenceSearchData;
 
-/* build a temp reference to the parent */
-static void meta_tmp_ref(Sequence *seq_par, Sequence *seq)
-{
-  for (; seq; seq = seq->next) {
-    seq->tmp = seq_par;
-    if (seq->type == SEQ_TYPE_META) {
-      meta_tmp_ref(seq, seq->seqbase.first);
-    }
-  }
-}
-
 static void rna_SequenceElement_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
   Scene *scene = (Scene *)ptr->owner_id;
@@ -210,7 +199,10 @@ static void rna_SequenceEditor_sequences_all_begin(CollectionPropertyIterator *i
   bli_iter->data = MEM_callocN(sizeof(SeqIterator), __func__);
   iter->internal.custom = bli_iter;
 
-  SEQ_iterator_ensure(all_strips, bli_iter->data, (Sequence **)&bli_iter->current);
+  if (!SEQ_iterator_ensure(all_strips, bli_iter->data, (Sequence **)&bli_iter->current)) {
+    SEQ_collection_free(all_strips);
+  }
+
   iter->valid = bli_iter->current != NULL;
 }
 
@@ -231,7 +223,9 @@ static void rna_SequenceEditor_sequences_all_end(CollectionPropertyIterator *ite
 {
   BLI_Iterator *bli_iter = iter->internal.custom;
   SeqIterator *seq_iter = bli_iter->data;
-  SEQ_collection_free(seq_iter->collection);
+  if (seq_iter->collection != NULL) {
+    SEQ_collection_free(seq_iter->collection);
+  }
   MEM_freeN(seq_iter);
   MEM_freeN(bli_iter);
 }
