@@ -330,7 +330,6 @@ set(SRC
   BKE_customdata_file.h
   BKE_data_transfer.h
   BKE_deform.h
-  BKE_spline.hh
   BKE_displist.h
   BKE_displist_tangent.h
   BKE_duplilist.h
@@ -421,6 +420,7 @@ set(SRC
   BKE_softbody.h
   BKE_sound.h
   BKE_speaker.h
+  BKE_spline.hh
   BKE_studiolight.h
   BKE_subdiv.h
   BKE_subdiv_ccg.h
@@ -765,6 +765,7 @@ add_dependencies(bf_blenkernel bf_dna)
 
 if(WITH_GTESTS)
   set(TEST_SRC
+    intern/action_test.cc
     intern/armature_test.cc
     intern/cryptomatte_test.cc
     intern/fcurve_test.cc
