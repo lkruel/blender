@@ -15,5 +15,6 @@ jobs:
         with:
           token: ${{ secrets.USER_TOKEN }}
           owner: blender
+          auto_approve: true
           #base: master
           #head: master
