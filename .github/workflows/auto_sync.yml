@@ -18,3 +18,7 @@ jobs:
           auto_approve: true
           #base: master
           #head: master
+
+      - uses: hmarr/auto-approve-action@v2
+        with:
+          github-token: "${{ secrets.USER_TOKEN }}"
