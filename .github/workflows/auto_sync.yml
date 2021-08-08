@@ -13,12 +13,8 @@ jobs:
     steps:
       - uses: tgymnich/fork-sync@v1.4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          personal_token: ${{ secrets.USER_TOKEN }}
           owner: blender
           #base: master
           #head: master
 
-      - uses: hmarr/auto-approve-action@v2
-        with:
-          github-token: "${{ secrets.USER_TOKEN }}"
+  
