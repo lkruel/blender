@@ -142,6 +142,17 @@ class OUTLINER_MT_context_menu_view(Menu):
         layout.operator("outliner.show_one_level", text="Hide One Level").open = False
 
 
+class OUTLINER_MT_view_pie(Menu):
+    bl_label = "View"
+
+    def draw(self, context):
+        layout = self.layout
+
+        pie = layout.menu_pie()
+        pie.operator("outliner.show_hierarchy")
+        pie.operator("outliner.show_active", icon='ZOOM_SELECTED')
+
+
 class OUTLINER_MT_edit_datablocks(Menu):
     bl_label = "Edit"
 
@@ -313,17 +324,14 @@ class OUTLINER_MT_object(Menu):
 class OUTLINER_MT_asset(Menu):
     bl_label = "Assets"
 
-    @classmethod
-    def poll(cls, context):
-        return context.preferences.experimental.use_asset_browser
-
     def draw(self, context):
         layout = self.layout
 
         space = context.space_data
 
         layout.operator("asset.mark")
-        layout.operator("asset.clear")
+        layout.operator("asset.clear", text="Clear Asset").set_fake_user = False
+        layout.operator("asset.clear", text="Clear Asset (Set Fake User)").set_fake_user = True
 
 
 class OUTLINER_PT_filter(Panel):
@@ -440,7 +448,7 @@ class OUTLINER_PT_filter(Panel):
         if (
                 bpy.data.curves or
                 bpy.data.metaballs or
-                (hasattr(bpy.data, "hairs") and bpy.data.hairs) or
+                (hasattr(bpy.data, "hair_curves") and bpy.data.hair_curves) or
                 (hasattr(bpy.data, "pointclouds") and bpy.data.pointclouds) or
                 bpy.data.volumes or
                 bpy.data.lightprobes or
@@ -474,6 +482,7 @@ classes = (
     OUTLINER_MT_asset,
     OUTLINER_MT_context_menu,
     OUTLINER_MT_context_menu_view,
+    OUTLINER_MT_view_pie,
     OUTLINER_PT_filter,
 )
 

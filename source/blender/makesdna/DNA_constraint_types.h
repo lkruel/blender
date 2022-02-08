@@ -37,7 +37,7 @@ struct Ipo;
 struct Text;
 
 /* channels reside in Object or Action (ListBase) constraintChannels */
-// XXX deprecated... old AnimSys
+/* XXX: deprecated... old AnimSys. */
 typedef struct bConstraintChannel {
   struct bConstraintChannel *next, *prev;
   struct Ipo *ipo;
@@ -81,8 +81,8 @@ typedef struct bConstraint {
   /** Local influence ipo or driver */
   struct Ipo *ipo DNA_DEPRECATED;
 
-  /* below are readonly fields that are set at runtime
-   * by the solver for use in the GE (only IK atm) */
+  /* Below are read-only fields that are set at runtime
+   * by the solver for use in the GE (only IK at the moment). */
   /** Residual error on constraint expressed in blender unit. */
   float lin_error;
   /** Residual error on constraint expressed in radiant. */
@@ -714,8 +714,6 @@ typedef enum eBConstraint_Flags {
   CONSTRAINT_SPACEONCE = (1 << 6),
   /* influence ipo is on constraint itself, not in action channel */
   CONSTRAINT_OWN_IPO = (1 << 7),
-  /* indicates that constraint was added locally (i.e.  didn't come from the proxy-lib) */
-  CONSTRAINT_PROXY_LOCAL = (1 << 8),
   /* indicates that constraint is temporarily disabled (only used in GE) */
   CONSTRAINT_OFF = (1 << 9),
   /* use bbone curve shape when calculating headtail values (also used by dependency graph!) */
@@ -728,7 +726,7 @@ typedef enum eBConstraint_Flags {
 
 /* bConstraint->ownspace/tarspace */
 typedef enum eBConstraint_SpaceTypes {
-  /** Default for all - worldspace. */
+  /** Default for all - world-space. */
   CONSTRAINT_SPACE_WORLD = 0,
   /** For all - custom space. */
   CONSTRAINT_SPACE_CUSTOM = 5,
@@ -939,7 +937,7 @@ typedef enum eTrackToAxis_Modes {
 
 /* Shrinkwrap flags */
 typedef enum eShrinkwrap_Flags {
-  /* Also raycast in the opposite direction. */
+  /* Also ray-cast in the opposite direction. */
   CON_SHRINKWRAP_PROJECT_OPPOSITE = (1 << 0),
   /* Invert the cull mode when projecting opposite. */
   CON_SHRINKWRAP_PROJECT_INVERT_CULL = (1 << 1),

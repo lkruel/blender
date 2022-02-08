@@ -43,11 +43,6 @@
 
 #include "BLI_strict_flags.h"
 
-/**
- * This function is used for generating thumbnail previews.
- *
- * \note called from a thread, so it bypasses the normal BLF_* api (which isn't thread-safe).
- */
 void BLF_thumb_preview(const char *filename,
                        const char **draw_str,
                        const char **i18n_draw_str,
@@ -66,7 +61,6 @@ void BLF_thumb_preview(const char *filename,
   int font_shrink = 4;
 
   FontBLF *font;
-  GlyphCacheBLF *gc;
 
   /* Create a new blender font obj and fill it with default values */
   font = blf_font_new("thumb_font", filename);
@@ -95,10 +89,8 @@ void BLF_thumb_preview(const char *filename,
     const size_t draw_str_i18n_len = strlen(draw_str_i18n);
     int draw_str_i18n_nbr = 0;
 
-    blf_font_size(font, (unsigned int)MAX2(font_size_min, font_size_curr), dpi);
-    gc = blf_glyph_cache_find(font, font->size, font->dpi);
-    /* There will be no matching glyph cache if blf_font_size() failed to set font size. */
-    if (!gc) {
+    CLAMP_MIN(font_size_curr, font_size_min);
+    if (!blf_font_size(font, (float)font_size_curr, dpi)) {
       break;
     }
 
@@ -106,7 +98,7 @@ void BLF_thumb_preview(const char *filename,
     font_size_curr -= (font_size_curr / font_shrink);
     font_shrink += 1;
 
-    font->pos[1] -= gc->ascender * 1.1f;
+    font->pos[1] -= blf_font_ascender(font) * 1.1f;
 
     /* We fallback to default english strings in case not enough chars are available in current
      * font for given translated string (useful in non-latin i18n context, like Chinese,

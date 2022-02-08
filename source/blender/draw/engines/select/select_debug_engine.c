@@ -19,7 +19,7 @@
 /** \file
  * \ingroup draw_engine
  *
- * Engine for debuging the selection map drawing.
+ * Engine for debugging the selection map drawing.
  */
 
 #include "DNA_ID.h"
@@ -120,6 +120,7 @@ DrawEngineType draw_engine_debug_select_type = {
     &select_debug_data_size,
     &select_debug_engine_init,
     &select_debug_engine_free,
+    NULL, /* instance_free */
     NULL,
     NULL,
     NULL,

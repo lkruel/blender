@@ -27,11 +27,13 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
+#include "BLI_linklist.h"
 #include "BLI_utildefines.h"
 
 #include "BKE_appdir.h"
 #include "BKE_context.h"
 #include "BKE_global.h"
+#include "BKE_lib_remap.h"
 #include "BKE_main.h"
 #include "BKE_screen.h"
 
@@ -43,6 +45,8 @@
 #include "WM_message.h"
 #include "WM_types.h"
 
+#include "ED_asset.h"
+#include "ED_asset_indexer.h"
 #include "ED_fileselect.h"
 #include "ED_screen.h"
 #include "ED_space_api.h"
@@ -54,6 +58,7 @@
 #include "UI_view2d.h"
 
 #include "GPU_framebuffer.h"
+#include "file_indexer.h"
 #include "file_intern.h" /* own include */
 #include "filelist.h"
 #include "fsmenu.h"
@@ -303,15 +308,6 @@ static void file_ensure_valid_region_state(bContext *C,
   }
 }
 
-/**
- * Tag the space to recreate the file-list.
- */
-static void file_tag_reset_list(ScrArea *area, SpaceFile *sfile)
-{
-  filelist_tag_force_reset(sfile->files);
-  ED_area_tag_refresh(area);
-}
-
 static void file_refresh(const bContext *C, ScrArea *area)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
@@ -326,7 +322,7 @@ static void file_refresh(const bContext *C, ScrArea *area)
 
   if (sfile->files && (sfile->tags & FILE_TAG_REBUILD_MAIN_FILES) &&
       filelist_needs_reset_on_main_changes(sfile->files)) {
-    filelist_tag_force_reset(sfile->files);
+    filelist_tag_force_reset_mainfiles(sfile->files);
   }
   sfile->tags &= ~FILE_TAG_REBUILD_MAIN_FILES;
 
@@ -334,6 +330,13 @@ static void file_refresh(const bContext *C, ScrArea *area)
     sfile->files = filelist_new(params->type);
     params->highlight_file = -1; /* added this so it opens nicer (ton) */
   }
+
+  if (ED_fileselect_is_asset_browser(sfile)) {
+    /* Ask the asset code for appropriate ID filter flags for the supported assets, and mask others
+     * out. */
+    params->filter_id &= ED_asset_types_supported_as_filter_flags();
+  }
+
   filelist_settype(sfile->files, params->type);
   filelist_setdir(sfile->files, params->dir);
   filelist_setrecursion(sfile->files, params->recursion_level);
@@ -349,6 +352,16 @@ static void file_refresh(const bContext *C, ScrArea *area)
       (params->flag & FILE_ASSETS_ONLY) != 0,
       params->filter_glob,
       params->filter_search);
+  if (asset_params) {
+    filelist_set_asset_catalog_filter_options(
+        sfile->files, asset_params->asset_catalog_visibility, &asset_params->catalog_id);
+  }
+
+  if (ED_fileselect_is_asset_browser(sfile)) {
+    const bool use_asset_indexer = !USER_EXPERIMENTAL_TEST(&U, no_asset_indexing);
+    filelist_setindexer(sfile->files,
+                        use_asset_indexer ? &file_indexer_asset : &file_indexer_noop);
+  }
 
   /* Update the active indices of bookmarks & co. */
   sfile->systemnr = fsmenu_get_active_indices(fsmenu, FS_CATEGORY_SYSTEM, params->dir);
@@ -359,7 +372,7 @@ static void file_refresh(const bContext *C, ScrArea *area)
 
   if (filelist_needs_force_reset(sfile->files)) {
     filelist_readjob_stop(sfile->files, wm);
-    filelist_clear(sfile->files);
+    filelist_clear_from_reset_tag(sfile->files);
   }
 
   if (filelist_needs_reading(sfile->files)) {
@@ -421,9 +434,8 @@ static void file_on_reload_callback_call(SpaceFile *sfile)
 static void file_reset_filelist_showing_main_data(ScrArea *area, SpaceFile *sfile)
 {
   if (sfile->files && filelist_needs_reset_on_main_changes(sfile->files)) {
-    /* Full refresh of the file list if local asset data was changed. Refreshing this view
-     * is cheap and users expect this to be updated immediately. */
-    file_tag_reset_list(area, sfile);
+    filelist_tag_force_reset_mainfiles(sfile->files);
+    ED_area_tag_refresh(area);
   }
 }
 
@@ -575,6 +587,16 @@ static void file_main_region_message_subscribe(const wmRegionMessageSubscribePar
     /* All properties for this space type. */
     WM_msg_subscribe_rna(mbus, &ptr, NULL, &msg_sub_value_area_tag_refresh, __func__);
   }
+
+  /* Experimental Asset Browser features option. */
+  {
+    PointerRNA ptr;
+    RNA_pointer_create(NULL, &RNA_PreferencesExperimental, &U.experimental, &ptr);
+    PropertyRNA *prop = RNA_struct_find_property(&ptr, "use_extended_asset_browser");
+
+    /* All properties for this space type. */
+    WM_msg_subscribe_rna(mbus, &ptr, prop, &msg_sub_value_area_tag_refresh, __func__);
+  }
 }
 
 static bool file_main_region_needs_refresh_before_draw(SpaceFile *sfile)
@@ -644,10 +666,10 @@ static void file_main_region_draw(const bContext *C, ARegion *region)
   /* on first read, find active file */
   if (params->highlight_file == -1) {
     wmEvent *event = CTX_wm_window(C)->eventstate;
-    file_highlight_set(sfile, region, event->x, event->y);
+    file_highlight_set(sfile, region, event->xy[0], event->xy[1]);
   }
 
-  if (!file_draw_hint_if_invalid(sfile, region)) {
+  if (!file_draw_hint_if_invalid(C, sfile, region)) {
     file_draw_list(C, region);
   }
 
@@ -722,8 +744,18 @@ static void file_tools_region_draw(const bContext *C, ARegion *region)
   ED_region_panels(C, region);
 }
 
-static void file_tools_region_listener(const wmRegionListenerParams *UNUSED(listener_params))
+static void file_tools_region_listener(const wmRegionListenerParams *listener_params)
 {
+  const wmNotifier *wmn = listener_params->notifier;
+  ARegion *region = listener_params->region;
+
+  switch (wmn->category) {
+    case NC_SCENE:
+      if (ELEM(wmn->data, ND_MODE)) {
+        ED_region_tag_redraw(region);
+      }
+      break;
+  }
 }
 
 static void file_tool_props_region_listener(const wmRegionListenerParams *listener_params)
@@ -735,6 +767,11 @@ static void file_tool_props_region_listener(const wmRegionListenerParams *listen
     case NC_ID:
       if (ELEM(wmn->action, NA_RENAME)) {
         /* In case the filelist shows ID names. */
+        ED_region_tag_redraw(region);
+      }
+      break;
+    case NC_SCENE:
+      if (ELEM(wmn->data, ND_MODE)) {
         ED_region_tag_redraw(region);
       }
       break;
@@ -852,18 +889,14 @@ static void file_space_subtype_item_extend(bContext *UNUSED(C),
                                            EnumPropertyItem **item,
                                            int *totitem)
 {
-  if (U.experimental.use_asset_browser) {
-    RNA_enum_items_add(item, totitem, rna_enum_space_file_browse_mode_items);
-  }
-  else {
-    RNA_enum_items_add_value(
-        item, totitem, rna_enum_space_file_browse_mode_items, FILE_BROWSE_MODE_FILES);
-  }
+  RNA_enum_items_add(item, totitem, rna_enum_space_file_browse_mode_items);
 }
 
-static const char *file_context_dir[] = {
+const char *file_context_dir[] = {
     "active_file",
+    "selected_files",
     "asset_library_ref",
+    "selected_asset_files",
     "id",
     NULL,
 };
@@ -897,6 +930,20 @@ static int /*eContextResult*/ file_context(const bContext *C,
     CTX_data_pointer_set(result, &screen->id, &RNA_FileSelectEntry, file);
     return CTX_RESULT_OK;
   }
+  if (CTX_data_equals(member, "selected_files")) {
+    const int num_files_filtered = filelist_files_ensure(sfile->files);
+
+    for (int file_index = 0; file_index < num_files_filtered; file_index++) {
+      if (filelist_entry_is_selected(sfile->files, file_index)) {
+        FileDirEntry *entry = filelist_file(sfile->files, file_index);
+        CTX_data_list_add(result, &screen->id, &RNA_FileSelectEntry, entry);
+      }
+    }
+
+    CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
+    return CTX_RESULT_OK;
+  }
+
   if (CTX_data_equals(member, "asset_library_ref")) {
     FileAssetSelectParams *asset_params = ED_fileselect_get_asset_params(sfile);
     if (!asset_params) {
@@ -905,6 +952,24 @@ static int /*eContextResult*/ file_context(const bContext *C,
 
     CTX_data_pointer_set(
         result, &screen->id, &RNA_AssetLibraryReference, &asset_params->asset_library_ref);
+    return CTX_RESULT_OK;
+  }
+  /** TODO temporary AssetHandle design: For now this returns the file entry. Would be better if it
+   * was `"selected_assets"` and returned the assets (e.g. as `AssetHandle`) directly. See comment
+   * for #AssetHandle for more info. */
+  if (CTX_data_equals(member, "selected_asset_files")) {
+    const int num_files_filtered = filelist_files_ensure(sfile->files);
+
+    for (int file_index = 0; file_index < num_files_filtered; file_index++) {
+      if (filelist_entry_is_selected(sfile->files, file_index)) {
+        FileDirEntry *entry = filelist_file(sfile->files, file_index);
+        if (entry->asset_data) {
+          CTX_data_list_add(result, &screen->id, &RNA_FileSelectEntry, entry);
+        }
+      }
+    }
+
+    CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
     return CTX_RESULT_OK;
   }
   if (CTX_data_equals(member, "id")) {
@@ -925,7 +990,7 @@ static int /*eContextResult*/ file_context(const bContext *C,
   return CTX_RESULT_MEMBER_NOT_FOUND;
 }
 
-static void file_id_remap(ScrArea *area, SpaceLink *sl, ID *UNUSED(old_id), ID *UNUSED(new_id))
+static void file_id_remap(ScrArea *area, SpaceLink *sl, const struct IDRemapper *UNUSED(mappings))
 {
   SpaceFile *sfile = (SpaceFile *)sl;
 
@@ -936,7 +1001,6 @@ static void file_id_remap(ScrArea *area, SpaceLink *sl, ID *UNUSED(old_id), ID *
   file_reset_filelist_showing_main_data(area, sfile);
 }
 
-/* only called once, from space/spacetypes.c */
 void ED_spacetype_file(void)
 {
   SpaceType *st = MEM_callocN(sizeof(SpaceType), "spacetype file");
@@ -1010,6 +1074,7 @@ void ED_spacetype_file(void)
   art->init = file_tools_region_init;
   art->draw = file_tools_region_draw;
   BLI_addhead(&st->regiontypes, art);
+  file_tools_region_panels_register(art);
 
   /* regions: tool properties */
   art = MEM_callocN(sizeof(ARegionType), "spacetype file operator region");

@@ -23,10 +23,8 @@
  * \brief Struct muncher for making SDNA.
  *
  * \section aboutmakesdnac About makesdna tool
- * Originally by Ton, some mods by Frank, and some cleaning and
- * extension by Nzc.
  *
- * Makesdna creates a .c file with a long string of numbers that
+ * `makesdna` creates a .c file with a long string of numbers that
  * encode the Blender file format. It is fast, because it is basically
  * a binary dump. There are some details to mind when reconstructing
  * the file (endianness and byte-alignment).
@@ -36,9 +34,9 @@
  * how much memory (on disk or in ram) is needed to store that struct,
  * and the offsets for reaching a particular one.
  *
- * There is a facility to get verbose output from sdna. Search for
- * \ref debugSDNA. This int can be set to 0 (no output) to some int. Higher
- * numbers give more output.
+ * There is a facility to get verbose output from `sdna`. Search for
+ * \ref debugSDNA. This int can be set to 0 (no output) to some int.
+ * Higher numbers give more output.
  */
 
 #define DNA_DEPRECATED_ALLOW
@@ -136,11 +134,12 @@ static const char *includefiles[] = {
     "DNA_lightprobe_types.h",
     "DNA_curveprofile_types.h",
     "DNA_xr_types.h",
-    "DNA_hair_types.h",
+    "DNA_curves_types.h",
     "DNA_pointcloud_types.h",
     "DNA_volume_types.h",
     "DNA_simulation_types.h",
     "DNA_pointcache_types.h",
+    "DNA_uuid_types.h",
     "DNA_asset_types.h",
 
     /* see comment above before editing! */
@@ -165,6 +164,10 @@ static char **names;
 static char **types;
 /** At `types_size[a]` is the size of type `a` on this systems bitness (32 or 64). */
 static short *types_size_native;
+/** Contains align requirements for a struct on 32 bit systems. */
+static short *types_align_32;
+/** Contains align requirements for a struct on 64 bit systems. */
+static short *types_align_64;
 /** Contains sizes as they are calculated on 32 bit systems. */
 static short *types_size_32;
 /** Contains sizes as they are calculated on 64 bit systems. */
@@ -406,6 +409,8 @@ static int add_type(const char *str, int size)
         types_size_native[index] = size;
         types_size_32[index] = size;
         types_size_64[index] = size;
+        types_align_32[index] = size;
+        types_align_64[index] = size;
       }
       return index;
     }
@@ -419,7 +424,8 @@ static int add_type(const char *str, int size)
   types_size_native[types_len] = size;
   types_size_32[types_len] = size;
   types_size_64[types_len] = size;
-
+  types_align_32[types_len] = size;
+  types_align_64[types_len] = size;
   if (types_len >= max_array_len) {
     printf("too many types\n");
     return types_len - 1;
@@ -966,7 +972,9 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
         int size_native = 0;
         int size_32 = 0;
         int size_64 = 0;
-        bool has_pointer = false;
+        /* Sizes of the largest field in a struct. */
+        int max_align_32 = 0;
+        int max_align_64 = 0;
 
         /* check all elements in struct */
         for (int b = 0; b < structpoin[1]; b++, sp += 2) {
@@ -995,7 +1003,6 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
 
           /* is it a pointer or function pointer? */
           if (cp[0] == '*' || cp[1] == '*') {
-            has_pointer = 1;
             /* has the name an extra length? (array) */
             int mul = 1;
             if (cp[namelen - 1] == ']') {
@@ -1042,6 +1049,8 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
             size_native += sizeof(void *) * mul;
             size_32 += 4 * mul;
             size_64 += 8 * mul;
+            max_align_32 = MAX2(max_align_32, 4);
+            max_align_64 = MAX2(max_align_64, 8);
           }
           else if (cp[0] == '[') {
             /* parsing can cause names "var" and "[3]"
@@ -1087,6 +1096,8 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
             size_native += mul * types_size_native[type];
             size_32 += mul * types_size_32[type];
             size_64 += mul * types_size_64[type];
+            max_align_32 = MAX2(max_align_32, types_align_32[type]);
+            max_align_64 = MAX2(max_align_64, types_align_64[type]);
           }
           else {
             size_native = 0;
@@ -1103,16 +1114,42 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
           types_size_native[structtype] = size_native;
           types_size_32[structtype] = size_32;
           types_size_64[structtype] = size_64;
-          /* Two ways to detect if a struct contains a pointer:
-           * has_pointer is set or size_native doesn't match any of 32/64bit lengths. */
-          if (has_pointer || size_64 != size_native || size_32 != size_native) {
-            if (size_64 % 8) {
+          types_align_32[structtype] = max_align_32;
+          types_align_64[structtype] = max_align_64;
+
+          /* Sanity check 1: alignment should never be 0. */
+          BLI_assert(max_align_32);
+          BLI_assert(max_align_64);
+
+          /* Sanity check 2: alignment should always be equal or smaller than the maximum
+           * size of a build in type which is 8 bytes (ie int64_t or double). */
+          BLI_assert(max_align_32 <= 8);
+          BLI_assert(max_align_64 <= 8);
+
+          if (size_32 % max_align_32) {
+            /* There is an one odd case where only the 32 bit struct has alignment issues
+             * and the 64 bit does not, that can only be fixed by adding a padding pointer
+             * to the struct to resolve the problem. */
+            if ((size_64 % max_align_64 == 0) && (size_32 % max_align_32 == 4)) {
               fprintf(stderr,
-                      "Sizeerror 8 in struct: %s (add %d bytes)\n",
-                      types[structtype],
-                      size_64 % 8);
-              dna_error = 1;
+                      "Sizeerror in 32 bit struct: %s (add padding pointer)\n",
+                      types[structtype]);
             }
+            else {
+              fprintf(stderr,
+                      "Sizeerror in 32 bit struct: %s (add %d bytes)\n",
+                      types[structtype],
+                      max_align_32 - (size_32 % max_align_32));
+            }
+            dna_error = 1;
+          }
+
+          if (size_64 % max_align_64) {
+            fprintf(stderr,
+                    "Sizeerror in 64 bit struct: %s (add %d bytes)\n",
+                    types[structtype],
+                    max_align_64 - (size_64 % max_align_64));
+            dna_error = 1;
           }
 
           if (size_native % 4 && !ELEM(size_native, 1, 2)) {
@@ -1229,6 +1266,9 @@ static int make_structDNA(const char *base_directory,
   types_size_native = MEM_callocN(sizeof(short) * max_array_len, "types_size_native");
   types_size_32 = MEM_callocN(sizeof(short) * max_array_len, "types_size_32");
   types_size_64 = MEM_callocN(sizeof(short) * max_array_len, "types_size_64");
+  types_align_32 = MEM_callocN(sizeof(short) * max_array_len, "types_size_32");
+  types_align_64 = MEM_callocN(sizeof(short) * max_array_len, "types_size_64");
+
   structs = MEM_callocN(sizeof(short *) * max_array_len, "structs");
 
   /* Build versioning data */
@@ -1317,7 +1357,11 @@ static int make_structDNA(const char *base_directory,
       sp += 2;
       /* ? num_types was elem? */
       for (b = 0; b < num_types; b++, sp += 2) {
-        printf("   %s %s\n", types[sp[0]], names[sp[1]]);
+        printf("   %s %s allign32:%d, allign64:%d\n",
+               types[sp[0]],
+               names[sp[1]],
+               types_align_32[sp[0]],
+               types_align_64[sp[0]]);
       }
     }
   }
@@ -1439,6 +1483,8 @@ static int make_structDNA(const char *base_directory,
   MEM_freeN(types_size_native);
   MEM_freeN(types_size_32);
   MEM_freeN(types_size_64);
+  MEM_freeN(types_align_32);
+  MEM_freeN(types_align_64);
   MEM_freeN(structs);
 
   BLI_memarena_free(mem_arena);
@@ -1509,8 +1555,18 @@ int main(int argc, char **argv)
         base_directory = BASE_HEADER;
       }
 
+      /* NOTE: #init_structDNA() in dna_genfile.c expects `sdna->data` is 4-bytes aligned.
+       * `DNAstr[]` buffer written by `makesdna` is used for this data, so make `DNAstr` forcefully
+       * 4-bytes aligned. */
+#ifdef __GNUC__
+#  define FORCE_ALIGN_4 " __attribute__((aligned(4))) "
+#else
+#  define FORCE_ALIGN_4 " "
+#endif
       fprintf(file_dna, "extern const unsigned char DNAstr[];\n");
-      fprintf(file_dna, "const unsigned char DNAstr[] = {\n");
+      fprintf(file_dna, "const unsigned char" FORCE_ALIGN_4 "DNAstr[] = {\n");
+#undef FORCE_ALIGN_4
+
       if (make_structDNA(base_directory, file_dna, file_dna_offsets, file_dna_verify)) {
         /* error */
         fclose(file_dna);
@@ -1580,6 +1636,7 @@ int main(int argc, char **argv)
 #include "DNA_constraint_types.h"
 #include "DNA_curve_types.h"
 #include "DNA_curveprofile_types.h"
+#include "DNA_curves_types.h"
 #include "DNA_customdata_types.h"
 #include "DNA_dynamicpaint_types.h"
 #include "DNA_effect_types.h"
@@ -1588,7 +1645,6 @@ int main(int argc, char **argv)
 #include "DNA_freestyle_types.h"
 #include "DNA_gpencil_modifier_types.h"
 #include "DNA_gpencil_types.h"
-#include "DNA_hair_types.h"
 #include "DNA_image_types.h"
 #include "DNA_ipo_types.h"
 #include "DNA_key_types.h"
@@ -1631,6 +1687,7 @@ int main(int argc, char **argv)
 #include "DNA_texture_types.h"
 #include "DNA_tracking_types.h"
 #include "DNA_userdef_types.h"
+#include "DNA_uuid_types.h"
 #include "DNA_vec_types.h"
 #include "DNA_vfont_types.h"
 #include "DNA_view2d_types.h"

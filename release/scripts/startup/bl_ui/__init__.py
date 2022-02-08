@@ -33,9 +33,9 @@ _modules = [
     "properties_data_bone",
     "properties_data_camera",
     "properties_data_curve",
+    "properties_data_curves",
     "properties_data_empty",
     "properties_data_gpencil",
-    "properties_data_hair",
     "properties_data_light",
     "properties_data_lattice",
     "properties_data_mesh",
@@ -116,6 +116,8 @@ def register():
     for mod in _modules_loaded:
         for cls in mod.classes:
             register_class(cls)
+
+    space_filebrowser.register_props()
 
     from bpy.props import (
         EnumProperty,

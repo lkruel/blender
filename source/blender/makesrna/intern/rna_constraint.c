@@ -3446,7 +3446,8 @@ static void rna_def_constraint_transform_cache(BlenderRNA *brna)
   RNA_define_lib_overridable(false);
 }
 
-/* base struct for constraints */
+/* Define the base struct for constraints. */
+
 void RNA_def_constraint(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -3473,6 +3474,15 @@ void RNA_def_constraint(BlenderRNA *brna)
   RNA_def_property_enum_sdna(prop, NULL, "type");
   RNA_def_property_enum_items(prop, rna_enum_constraint_type_items);
   RNA_def_property_ui_text(prop, "Type", "");
+
+  prop = RNA_def_boolean(srna,
+                         "is_override_data",
+                         false,
+                         "Override Constraint",
+                         "In a local override object, whether this constraint comes from the "
+                         "linked reference object, or is local to the override");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", CONSTRAINT_OVERRIDE_LIBRARY_LOCAL);
 
   RNA_define_lib_overridable(true);
 
@@ -3509,6 +3519,12 @@ void RNA_def_constraint(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
   RNA_def_property_ui_icon(prop, ICON_HIDE_OFF, -1);
 
+  prop = RNA_def_property(srna, "enabled", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", CONSTRAINT_OFF);
+  RNA_def_property_ui_text(prop, "Enabled", "Use the results of this constraint");
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+  RNA_def_property_ui_icon(prop, ICON_HIDE_ON, 1);
+
   prop = RNA_def_property(srna, "show_expanded", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
   RNA_def_property_boolean_sdna(prop, NULL, "ui_expand_flag", 0);
@@ -3526,14 +3542,6 @@ void RNA_def_constraint(BlenderRNA *brna)
   prop = RNA_def_property(srna, "active", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", CONSTRAINT_ACTIVE);
   RNA_def_property_ui_text(prop, "Active", "Constraint is the one being edited");
-
-  prop = RNA_def_property(srna, "is_proxy_local", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-  RNA_def_property_boolean_sdna(prop, NULL, "flag", CONSTRAINT_PROXY_LOCAL);
-  RNA_def_property_ui_text(
-      prop,
-      "Proxy Local",
-      "Constraint was added in this proxy instance (i.e. did not belong to source Armature)");
 
   /* values */
   prop = RNA_def_property(srna, "influence", PROP_FLOAT, PROP_FACTOR);

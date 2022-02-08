@@ -151,7 +151,7 @@ BLI_INLINE unsigned int clampis_uint(const unsigned int v,
 }
 
 /* --------------------------------------------------------------------- */
-/* local structs for mask rasterizeing                                   */
+/* local structs for mask rasterizing                                    */
 /* --------------------------------------------------------------------- */
 
 /**
@@ -292,10 +292,10 @@ static void maskrasterize_spline_differentiate_point_outset(float (*diff_feather
     co_curr = diff_points[k_curr];
     co_next = diff_points[k_next];
 
-    /* sub_v2_v2v2(d_prev, co_prev, co_curr); */ /* precalc */
+    // sub_v2_v2v2(d_prev, co_prev, co_curr); /* precalc */
     sub_v2_v2v2(d_next, co_curr, co_next);
 
-    /* normalize_v2(d_prev); */ /* precalc */
+    // normalize_v2(d_prev); /* precalc */
     normalize_v2(d_next);
 
     if ((do_test == false) ||
@@ -1474,9 +1474,6 @@ static void maskrasterize_buffer_cb(void *__restrict userdata,
   }
 }
 
-/**
- * \brief Rasterize a buffer from a single mask (threaded execution).
- */
 void BKE_maskrasterize_buffer(MaskRasterHandle *mr_handle,
                               const unsigned int width,
                               const unsigned int height,

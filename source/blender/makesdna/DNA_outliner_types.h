@@ -41,13 +41,13 @@ typedef struct TreeStoreElem {
 
 /** Used only to store data in blend files. */
 typedef struct TreeStore {
-  /** Was previously used for memory preallocation. */
+  /** Was previously used for memory pre-allocation. */
   int totelem DNA_DEPRECATED;
   /** Number of elements in data array. */
   int usedelem;
   /**
-   * Elements to be packed from mempool in writefile.c
-   * or extracted to mempool in readfile.c
+   * Elements to be packed from mempool in `writefile.c`
+   * or extracted to mempool in `readfile.c`.
    */
   TreeStoreElem *data;
 } TreeStore;
@@ -101,7 +101,7 @@ typedef enum eTreeStoreElemType {
   TSE_DRIVER_BASE = 16,           /* NO ID */
   /* TSE_DRIVER          = 17, */ /* UNUSED */
 
-  TSE_PROXY = 18,
+  /* TSE_PROXY = 18,           */ /* UNUSED */
   TSE_R_LAYER_BASE = 19,
   TSE_R_LAYER = 20,
   /* TSE_R_PASS          = 21, */ /* UNUSED */

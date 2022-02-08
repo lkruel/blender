@@ -29,8 +29,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_ID.h"
+#include "DNA_curves_types.h"
 #include "DNA_customdata_types.h"
-#include "DNA_hair_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_pointcloud_types.h"
@@ -38,9 +38,9 @@
 #include "BLI_string_utf8.h"
 
 #include "BKE_attribute.h"
+#include "BKE_curves.h"
 #include "BKE_customdata.h"
 #include "BKE_editmesh.h"
-#include "BKE_hair.h"
 #include "BKE_pointcloud.h"
 #include "BKE_report.h"
 
@@ -51,7 +51,7 @@ typedef struct DomainInfo {
   int length;
 } DomainInfo;
 
-static void get_domains(ID *id, DomainInfo info[ATTR_DOMAIN_NUM])
+static void get_domains(const ID *id, DomainInfo info[ATTR_DOMAIN_NUM])
 {
   memset(info, 0, sizeof(DomainInfo) * ATTR_DOMAIN_NUM);
 
@@ -88,12 +88,12 @@ static void get_domains(ID *id, DomainInfo info[ATTR_DOMAIN_NUM])
       }
       break;
     }
-    case ID_HA: {
-      Hair *hair = (Hair *)id;
-      info[ATTR_DOMAIN_POINT].customdata = &hair->pdata;
-      info[ATTR_DOMAIN_POINT].length = hair->totpoint;
-      info[ATTR_DOMAIN_CURVE].customdata = &hair->cdata;
-      info[ATTR_DOMAIN_CURVE].length = hair->totcurve;
+    case ID_CV: {
+      Curves *curves = (Curves *)id;
+      info[ATTR_DOMAIN_POINT].customdata = &curves->geometry.point_data;
+      info[ATTR_DOMAIN_POINT].length = curves->geometry.point_size;
+      info[ATTR_DOMAIN_CURVE].customdata = &curves->geometry.curve_data;
+      info[ATTR_DOMAIN_CURVE].length = curves->geometry.curve_size;
       break;
     }
     default:
@@ -223,6 +223,29 @@ bool BKE_id_attribute_remove(ID *id, CustomDataLayer *layer, ReportList *reports
   return true;
 }
 
+CustomDataLayer *BKE_id_attribute_find(const ID *id,
+                                       const char *name,
+                                       const int type,
+                                       const AttributeDomain domain)
+{
+  DomainInfo info[ATTR_DOMAIN_NUM];
+  get_domains(id, info);
+
+  CustomData *customdata = info[domain].customdata;
+  if (customdata == NULL) {
+    return NULL;
+  }
+
+  for (int i = 0; i < customdata->totlayer; i++) {
+    CustomDataLayer *layer = &customdata->layers[i];
+    if (layer->type == type && STREQ(layer->name, name)) {
+      return layer;
+    }
+  }
+
+  return NULL;
+}
+
 int BKE_id_attributes_length(ID *id, const CustomDataMask mask)
 {
   DomainInfo info[ATTR_DOMAIN_NUM];
@@ -278,8 +301,8 @@ bool BKE_id_attribute_required(ID *id, CustomDataLayer *layer)
     case ID_PT: {
       return BKE_pointcloud_customdata_required((PointCloud *)id, layer);
     }
-    case ID_HA: {
-      return BKE_hair_customdata_required((Hair *)id, layer);
+    case ID_CV: {
+      return BKE_curves_customdata_required((Curves *)id, layer);
     }
     default:
       return false;
@@ -349,8 +372,8 @@ int *BKE_id_attributes_active_index_p(ID *id)
     case ID_ME: {
       return &((Mesh *)id)->attributes_active_index;
     }
-    case ID_HA: {
-      return &((Hair *)id)->attributes_active_index;
+    case ID_CV: {
+      return &((Curves *)id)->attributes_active_index;
     }
     default:
       return NULL;

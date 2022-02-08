@@ -149,7 +149,6 @@ class DATA_PT_bone_groups(ArmatureButtonsPanel, Panel):
             col.operator("pose.group_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
 
             split = layout.split()
-            split.active = (ob.proxy is None)
 
             col = split.column()
             col.prop(group, "color_set")
@@ -220,6 +219,7 @@ class DATA_PT_pose_library(ArmatureButtonsPanel, Panel):
                 ).pose_index = poselib.pose_markers.active_index
 
             col.operator("poselib.action_sanitize", icon='HELP', text="")  # XXX: put in menu?
+            col.operator("poselib.convert_old_poselib", icon='ASSET_MANAGER', text="")
 
             if pose_marker_active is not None:
                 col.operator("poselib.pose_move", icon='TRIA_UP', text="").direction = 'UP'

@@ -99,17 +99,15 @@ static const int deg_debug_node_type_color_map[][2] = {
 
     /* Outer Types */
     {NodeType::PARAMETERS, 2},
-    {NodeType::PROXY, 3},
     {NodeType::ANIMATION, 4},
     {NodeType::TRANSFORM, 5},
     {NodeType::GEOMETRY, 6},
     {NodeType::SEQUENCER, 7},
     {NodeType::SHADING, 8},
-    {NodeType::SHADING_PARAMETERS, 9},
-    {NodeType::CACHE, 10},
-    {NodeType::POINT_CACHE, 11},
-    {NodeType::LAYER_COLLECTIONS, 12},
-    {NodeType::COPY_ON_WRITE, 13},
+    {NodeType::CACHE, 9},
+    {NodeType::POINT_CACHE, 10},
+    {NodeType::LAYER_COLLECTIONS, 11},
+    {NodeType::COPY_ON_WRITE, 12},
     {-1, 0},
 };
 #endif
@@ -405,13 +403,11 @@ static void deg_debug_graphviz_node(DotExportContext &ctx,
     case NodeType::PARAMETERS:
     case NodeType::ANIMATION:
     case NodeType::TRANSFORM:
-    case NodeType::PROXY:
     case NodeType::GEOMETRY:
     case NodeType::SEQUENCER:
     case NodeType::EVAL_POSE:
     case NodeType::BONE:
     case NodeType::SHADING:
-    case NodeType::SHADING_PARAMETERS:
     case NodeType::CACHE:
     case NodeType::POINT_CACHE:
     case NodeType::IMAGE_ANIMATION:
@@ -426,6 +422,8 @@ static void deg_debug_graphviz_node(DotExportContext &ctx,
     case NodeType::AUDIO:
     case NodeType::ARMATURE:
     case NodeType::GENERIC_DATABLOCK:
+    case NodeType::VISIBILITY:
+    case NodeType::NTREE_OUTPUT:
     case NodeType::SIMULATION: {
       ComponentNode *comp_node = (ComponentNode *)node;
       if (comp_node->operations.is_empty()) {
