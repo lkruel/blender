@@ -50,6 +50,7 @@
 #include "BLI_math.h"
 #include "BLI_path_util.h"
 #include "BLI_string.h"
+#include "BLI_timeit.hh"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -274,6 +275,7 @@ static std::pair<bool, AbcObjectReader *> visit_object(
     children_claiming_this_object += child_claims_this_object ? 1 : 0;
   }
   BLI_assert(children_claiming_this_object == claiming_child_readers.size());
+  UNUSED_VARS_NDEBUG(children_claiming_this_object);
 
   AbcObjectReader *reader = nullptr;
   const MetaData &md = object.getMetaData();
@@ -433,7 +435,16 @@ struct ImportJobData {
   bool was_cancelled;
   bool import_ok;
   bool is_background_job;
+  blender::timeit::TimePoint start_time;
 };
+
+static void report_job_duration(const ImportJobData *data)
+{
+  blender::timeit::Nanoseconds duration = blender::timeit::Clock::now() - data->start_time;
+  std::cout << "Alembic import of '" << data->filename << "' took ";
+  blender::timeit::print_duration(duration);
+  std::cout << '\n';
+}
 
 static void import_startjob(void *user_data, short *stop, short *do_update, float *progress)
 {
@@ -444,6 +455,7 @@ static void import_startjob(void *user_data, short *stop, short *do_update, floa
   data->stop = stop;
   data->do_update = do_update;
   data->progress = progress;
+  data->start_time = blender::timeit::Clock::now();
 
   WM_set_locked_interface(data->wm, true);
 
@@ -490,13 +502,13 @@ static void import_startjob(void *user_data, short *stop, short *do_update, floa
 
   /* Create objects and set scene frame range. */
 
-  const float size = static_cast<float>(data->readers.size());
+  const float size = float(data->readers.size());
   size_t i = 0;
 
   chrono_t min_time = std::numeric_limits<chrono_t>::max();
   chrono_t max_time = std::numeric_limits<chrono_t>::min();
 
-  ISampleSelector sample_sel(0.0f);
+  ISampleSelector sample_sel(0.0);
   std::vector<AbcObjectReader *>::iterator iter;
   for (iter = data->readers.begin(); iter != data->readers.end(); ++iter) {
     AbcObjectReader *reader = *iter;
@@ -525,14 +537,14 @@ static void import_startjob(void *user_data, short *stop, short *do_update, floa
     Scene *scene = data->scene;
 
     if (data->settings.is_sequence) {
-      SFRA = data->settings.sequence_offset;
-      EFRA = SFRA + (data->settings.sequence_len - 1);
-      CFRA = SFRA;
+      scene->r.sfra = data->settings.sequence_offset;
+      scene->r.efra = scene->r.sfra + (data->settings.sequence_len - 1);
+      scene->r.cfra = scene->r.sfra;
     }
     else if (min_time < max_time) {
-      SFRA = static_cast<int>(round(min_time * FPS));
-      EFRA = static_cast<int>(round(max_time * FPS));
-      CFRA = SFRA;
+      scene->r.sfra = int(round(min_time * FPS));
+      scene->r.efra = int(round(max_time * FPS));
+      scene->r.cfra = scene->r.sfra;
     }
   }
 
@@ -554,7 +566,7 @@ static void import_startjob(void *user_data, short *stop, short *do_update, floa
   i = 0;
   for (iter = data->readers.begin(); iter != data->readers.end(); ++iter) {
     AbcObjectReader *reader = *iter;
-    reader->setupObjectTransform(0.0f);
+    reader->setupObjectTransform(0.0);
 
     *data->progress = 0.7f + 0.3f * (++i / size);
     *data->do_update = true;
@@ -572,12 +584,10 @@ static void import_endjob(void *user_data)
 
   ImportJobData *data = static_cast<ImportJobData *>(user_data);
 
-  std::vector<AbcObjectReader *>::iterator iter;
-
   /* Delete objects on cancellation. */
   if (data->was_cancelled) {
-    for (iter = data->readers.begin(); iter != data->readers.end(); ++iter) {
-      Object *ob = (*iter)->object();
+    for (AbcObjectReader *reader : data->readers) {
+      Object *ob = reader->object();
 
       /* It's possible that cancellation occurred between the creation of
        * the reader and the creation of the Blender object. */
@@ -589,20 +599,23 @@ static void import_endjob(void *user_data)
     }
   }
   else {
-    /* Add object to scene. */
     Base *base;
     LayerCollection *lc;
+    const Scene *scene = data->scene;
     ViewLayer *view_layer = data->view_layer;
 
-    BKE_view_layer_base_deselect_all(view_layer);
+    BKE_view_layer_base_deselect_all(scene, view_layer);
 
     lc = BKE_layer_collection_get_active(view_layer);
 
-    for (iter = data->readers.begin(); iter != data->readers.end(); ++iter) {
-      Object *ob = (*iter)->object();
-
+    for (AbcObjectReader *reader : data->readers) {
+      Object *ob = reader->object();
       BKE_collection_object_add(data->bmain, lc->collection, ob);
-
+    }
+    /* Sync and do the view layer operations. */
+    BKE_view_layer_synced_ensure(scene, view_layer);
+    for (AbcObjectReader *reader : data->readers) {
+      Object *ob = reader->object();
       base = BKE_view_layer_base_find(view_layer, ob);
       /* TODO: is setting active needed? */
       BKE_view_layer_base_select_and_set_active(view_layer, base);
@@ -624,8 +637,7 @@ static void import_endjob(void *user_data)
     }
   }
 
-  for (iter = data->readers.begin(); iter != data->readers.end(); ++iter) {
-    AbcObjectReader *reader = *iter;
+  for (AbcObjectReader *reader : data->readers) {
     reader->decref();
 
     if (reader->refcount() == 0) {
@@ -646,6 +658,7 @@ static void import_endjob(void *user_data)
   }
 
   WM_main_add_notifier(NC_SCENE | ND_FRAME, data->scene);
+  report_job_duration(data);
 }
 
 static void import_freejob(void *user_data)
@@ -657,13 +670,7 @@ static void import_freejob(void *user_data)
 
 bool ABC_import(bContext *C,
                 const char *filepath,
-                float scale,
-                bool is_sequence,
-                bool set_frame_range,
-                int sequence_len,
-                int offset,
-                bool validate_meshes,
-                bool always_add_cache_reader,
+                const AlembicImportParams *params,
                 bool as_background_job)
 {
   /* Using new here since MEM_* functions do not call constructor to properly initialize data. */
@@ -676,13 +683,13 @@ bool ABC_import(bContext *C,
   job->import_ok = false;
   BLI_strncpy(job->filename, filepath, 1024);
 
-  job->settings.scale = scale;
-  job->settings.is_sequence = is_sequence;
-  job->settings.set_frame_range = set_frame_range;
-  job->settings.sequence_len = sequence_len;
-  job->settings.sequence_offset = offset;
-  job->settings.validate_meshes = validate_meshes;
-  job->settings.always_add_cache_reader = always_add_cache_reader;
+  job->settings.scale = params->global_scale;
+  job->settings.is_sequence = params->is_sequence;
+  job->settings.set_frame_range = params->set_frame_range;
+  job->settings.sequence_len = params->sequence_len;
+  job->settings.sequence_offset = params->sequence_offset;
+  job->settings.validate_meshes = params->validate_meshes;
+  job->settings.always_add_cache_reader = params->always_add_cache_reader;
   job->error_code = ABC_NO_ERROR;
   job->was_cancelled = false;
   job->archive = nullptr;
@@ -723,7 +730,7 @@ bool ABC_import(bContext *C,
 
 /* ************************************************************************** */
 
-void ABC_get_transform(CacheReader *reader, float r_mat_world[4][4], float time, float scale)
+void ABC_get_transform(CacheReader *reader, float r_mat_world[4][4], double time, float scale)
 {
   if (!reader) {
     return;
@@ -774,7 +781,7 @@ static AbcObjectReader *get_abc_reader(CacheReader *reader, Object *ob, const ch
   return abc_reader;
 }
 
-static ISampleSelector sample_selector_for_time(float time)
+static ISampleSelector sample_selector_for_time(chrono_t time)
 {
   /* kFloorIndex is used to be compatible with non-interpolating
    * properties; they use the floor. */
@@ -784,24 +791,28 @@ static ISampleSelector sample_selector_for_time(float time)
 Mesh *ABC_read_mesh(CacheReader *reader,
                     Object *ob,
                     Mesh *existing_mesh,
-                    const float time,
-                    const char **err_str,
-                    const int read_flag,
-                    const char *velocity_name,
-                    const float velocity_scale)
+                    const ABCReadParams *params,
+                    const char **err_str)
 {
   AbcObjectReader *abc_reader = get_abc_reader(reader, ob, err_str);
   if (abc_reader == nullptr) {
     return nullptr;
   }
 
-  ISampleSelector sample_sel = sample_selector_for_time(time);
-  return abc_reader->read_mesh(
-      existing_mesh, sample_sel, read_flag, velocity_name, velocity_scale, err_str);
+  ISampleSelector sample_sel = sample_selector_for_time(params->time);
+  return abc_reader->read_mesh(existing_mesh,
+                               sample_sel,
+                               params->read_flags,
+                               params->velocity_name,
+                               params->velocity_scale,
+                               err_str);
 }
 
-bool ABC_mesh_topology_changed(
-    CacheReader *reader, Object *ob, Mesh *existing_mesh, const float time, const char **err_str)
+bool ABC_mesh_topology_changed(CacheReader *reader,
+                               Object *ob,
+                               const Mesh *existing_mesh,
+                               const double time,
+                               const char **err_str)
 {
   AbcObjectReader *abc_reader = get_abc_reader(reader, ob, err_str);
   if (abc_reader == nullptr) {

@@ -14,12 +14,13 @@ static void node_declare(NodeDeclarationBuilder &b)
       .max(1.0f)
       .subtype(PROP_FACTOR);
   b.add_input<decl::Vector>(N_("Normal")).hide_value();
+  b.add_input<decl::Float>(N_("Weight")).unavailable();
   b.add_output<decl::Shader>(N_("BSDF"));
 }
 
 static int node_shader_gpu_bsdf_velvet(GPUMaterial *mat,
                                        bNode *node,
-                                       bNodeExecData *UNUSED(execdata),
+                                       bNodeExecData * /*execdata*/,
                                        GPUNodeStack *in,
                                        GPUNodeStack *out)
 {

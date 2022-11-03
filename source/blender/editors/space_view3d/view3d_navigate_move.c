@@ -35,7 +35,7 @@ void viewmove_modal_keymap(wmKeyConfig *keyconf)
 
   wmKeyMap *keymap = WM_modalkeymap_find(keyconf, "View3D Move Modal");
 
-  /* this function is called for each spacetype, only needs to add map once */
+  /* This function is called for each space-type, only needs to add map once. */
   if (keymap && keymap->modal_items) {
     return;
   }
@@ -43,15 +43,50 @@ void viewmove_modal_keymap(wmKeyConfig *keyconf)
   keymap = WM_modalkeymap_ensure(keyconf, "View3D Move Modal", modal_items);
 
   /* items for modal map */
-  WM_modalkeymap_add_item(keymap, MIDDLEMOUSE, KM_RELEASE, KM_ANY, 0, VIEW_MODAL_CONFIRM);
-  WM_modalkeymap_add_item(keymap, EVT_ESCKEY, KM_PRESS, KM_ANY, 0, VIEW_MODAL_CONFIRM);
+
+  WM_modalkeymap_add_item(keymap,
+                          &(const KeyMapItem_Params){
+                              .type = MIDDLEMOUSE,
+                              .value = KM_RELEASE,
+                              .modifier = KM_ANY,
+                              .direction = KM_ANY,
+                          },
+                          VIEW_MODAL_CONFIRM);
+  WM_modalkeymap_add_item(keymap,
+                          &(const KeyMapItem_Params){
+                              .type = EVT_ESCKEY,
+                              .value = KM_PRESS,
+                              .modifier = KM_ANY,
+                              .direction = KM_ANY,
+                          },
+                          VIEW_MODAL_CONFIRM);
 
   /* disabled mode switching for now, can re-implement better, later on */
 #if 0
-  WM_modalkeymap_add_item(keymap, LEFTMOUSE, KM_PRESS, KM_ANY, 0, VIEWROT_MODAL_SWITCH_ZOOM);
-  WM_modalkeymap_add_item(keymap, LEFTCTRLKEY, KM_PRESS, KM_ANY, 0, VIEWROT_MODAL_SWITCH_ZOOM);
-  WM_modalkeymap_add_item(
-      keymap, LEFTSHIFTKEY, KM_RELEASE, KM_ANY, 0, VIEWROT_MODAL_SWITCH_ROTATE);
+  WM_modalkeymap_add_item(keymap,
+                          &(const KeyMapItem_Params){
+                              .type = LEFTMOUSE,
+                              .value = KM_PRESS,
+                              .modifier = KM_ANY,
+                              .direction = KM_ANY,
+                          },
+                          VIEWROT_MODAL_SWITCH_ZOOM);
+  WM_modalkeymap_add_item(keymap,
+                          &(const KeyMapItem_Params){
+                              .type = EVT_LEFTCTRLKEY,
+                              .value = KM_PRESS,
+                              .modifier = KM_ANY,
+                              .direction = KM_ANY,
+                          },
+                          VIEWROT_MODAL_SWITCH_ZOOM);
+  WM_modalkeymap_add_item(keymap,
+                          &(const KeyMapItem_Params){
+                              .type = EVT_LEFTSHIFTKEY,
+                              .value = KM_RELEASE,
+                              .modifier = KM_ANY,
+                              .direction = KM_ANY,
+                          },
+                          VIEWROT_MODAL_SWITCH_ROTATE);
 #endif
 
   /* assign map to operators */
@@ -76,11 +111,11 @@ static int viewmove_modal(bContext *C, wmOperator *op, const wmEvent *event)
         event_code = VIEW_CONFIRM;
         break;
       case VIEWROT_MODAL_SWITCH_ZOOM:
-        WM_operator_name_call(C, "VIEW3D_OT_zoom", WM_OP_INVOKE_DEFAULT, NULL);
+        WM_operator_name_call(C, "VIEW3D_OT_zoom", WM_OP_INVOKE_DEFAULT, NULL, event);
         event_code = VIEW_CONFIRM;
         break;
       case VIEWROT_MODAL_SWITCH_ROTATE:
-        WM_operator_name_call(C, "VIEW3D_OT_rotate", WM_OP_INVOKE_DEFAULT, NULL);
+        WM_operator_name_call(C, "VIEW3D_OT_rotate", WM_OP_INVOKE_DEFAULT, NULL, event);
         event_code = VIEW_CONFIRM;
         break;
     }
@@ -105,6 +140,7 @@ static int viewmove_modal(bContext *C, wmOperator *op, const wmEvent *event)
   }
 
   if (ret & OPERATOR_FINISHED) {
+    ED_view3d_camera_lock_undo_push(op->type->name, vod->v3d, vod->rv3d, C);
     viewops_data_free(C, op->customdata);
     op->customdata = NULL;
   }

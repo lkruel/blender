@@ -33,12 +33,12 @@
  */
 
 #include "BLI_function_ref.hh"
+#include "BLI_generic_virtual_array.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 
-#include "FN_generic_virtual_array.hh"
-#include "FN_multi_function_builder.hh"
+#include "FN_multi_function.hh"
 
 namespace blender::fn {
 
@@ -119,7 +119,7 @@ template<typename NodePtr> class GFieldBase {
     return get_default_hash_2(*node_, node_output_index_);
   }
 
-  const fn::CPPType &cpp_type() const
+  const CPPType &cpp_type() const
   {
     return node_->output_cpp_type(node_output_index_);
   }
@@ -221,6 +221,17 @@ class FieldOperation : public FieldNode {
   const MultiFunction &multi_function() const;
 
   const CPPType &output_cpp_type(int output_index) const override;
+
+  static std::shared_ptr<FieldOperation> Create(std::shared_ptr<const MultiFunction> function,
+                                                Vector<GField> inputs = {})
+  {
+    return std::make_shared<FieldOperation>(FieldOperation(std::move(function), inputs));
+  }
+  static std::shared_ptr<FieldOperation> Create(const MultiFunction &function,
+                                                Vector<GField> inputs = {})
+  {
+    return std::make_shared<FieldOperation>(FieldOperation(function, inputs));
+  }
 };
 
 class FieldContext;
@@ -372,7 +383,7 @@ class FieldEvaluator : NonMovable, NonCopyable {
   /**
    * \param field: Field to add to the evaluator.
    * \param dst: Mutable span that the evaluated result for this field is be written into.
-   * \note: When the output may only be used as a single value, the version of this function with
+   * \note When the output may only be used as a single value, the version of this function with
    * a virtual array result array should be used.
    */
   int add_with_destination(GField field, GMutableSpan dst);
@@ -380,7 +391,7 @@ class FieldEvaluator : NonMovable, NonCopyable {
   /**
    * \param field: Field to add to the evaluator.
    * \param dst: Mutable span that the evaluated result for this field is be written into.
-   * \note: When the output may only be used as a single value, the version of this function with
+   * \note When the output may only be used as a single value, the version of this function with
    * a virtual array result array should be used.
    */
   template<typename T> int add_with_destination(Field<T> field, MutableSpan<T> dst)
@@ -401,7 +412,7 @@ class FieldEvaluator : NonMovable, NonCopyable {
     const int field_index = fields_to_evaluate_.append_and_get_index(std::move(field));
     dst_varrays_.append({});
     output_pointer_infos_.append(OutputPointerInfo{
-        varray_ptr, [](void *dst, const GVArray &varray, ResourceScope &UNUSED(scope)) {
+        varray_ptr, [](void *dst, const GVArray &varray, ResourceScope & /*scope*/) {
           *(VArray<T> *)dst = varray.typed<T>();
         }});
     return field_index;
@@ -476,12 +487,14 @@ template<typename T> T evaluate_constant_field(const Field<T> &field)
   return value;
 }
 
+Field<bool> invert_boolean_field(const Field<bool> &field);
+
+GField make_constant_field(const CPPType &type, const void *value);
+
 template<typename T> Field<T> make_constant_field(T value)
 {
   return make_constant_field(CPPType::get<T>(), &value);
 }
-
-GField make_constant_field(const CPPType &type, const void *value);
 
 /**
  * If the field depends on some input, the same field is returned.
@@ -533,7 +546,7 @@ template<typename T> struct ValueOrField {
 
   bool is_field() const
   {
-    return (bool)this->field;
+    return bool(this->field);
   }
 
   Field<T> as_field() const
@@ -551,6 +564,17 @@ template<typename T> struct ValueOrField {
       return evaluate_constant_field(this->field);
     }
     return this->value;
+  }
+
+  friend std::ostream &operator<<(std::ostream &stream, const ValueOrField<T> &value_or_field)
+  {
+    if (value_or_field.field) {
+      stream << "ValueOrField<T>";
+    }
+    else {
+      stream << value_or_field.value;
+    }
+    return stream;
   }
 };
 

@@ -186,7 +186,7 @@ static int open_exec(bContext *C, wmOperator *op)
   MovieClip *clip = NULL;
   char str[FILE_MAX];
 
-  if (RNA_collection_length(op->ptr, "files")) {
+  if (!RNA_collection_is_empty(op->ptr, "files")) {
     PointerRNA fileptr;
     PropertyRNA *prop;
     char dir_only[FILE_MAX], file_only[FILE_MAX];
@@ -201,7 +201,7 @@ static int open_exec(bContext *C, wmOperator *op)
     RNA_property_collection_lookup_int(op->ptr, prop, 0, &fileptr);
     RNA_string_get(&fileptr, "name", file_only);
 
-    BLI_join_dirfile(str, sizeof(str), dir_only, file_only);
+    BLI_path_join(str, sizeof(str), dir_only, file_only);
   }
   else {
     BKE_report(op->reports, RPT_ERROR, "No files selected to be opened");
@@ -777,7 +777,7 @@ void CLIP_OT_view_zoom_in(wmOperatorType *ot)
   ot->poll = ED_space_clip_view_clip_poll;
 
   /* flags */
-  ot->flag |= OPTYPE_LOCK_BYPASS;
+  ot->flag = OPTYPE_LOCK_BYPASS;
 
   /* properties */
   prop = RNA_def_float_vector(ot->srna,
@@ -834,7 +834,7 @@ void CLIP_OT_view_zoom_out(wmOperatorType *ot)
   ot->poll = ED_space_clip_view_clip_poll;
 
   /* flags */
-  ot->flag |= OPTYPE_LOCK_BYPASS;
+  ot->flag = OPTYPE_LOCK_BYPASS;
 
   /* properties */
   prop = RNA_def_float_vector(ot->srna,
@@ -883,7 +883,7 @@ void CLIP_OT_view_zoom_ratio(wmOperatorType *ot)
   ot->poll = ED_space_clip_view_clip_poll;
 
   /* flags */
-  ot->flag |= OPTYPE_LOCK_BYPASS;
+  ot->flag = OPTYPE_LOCK_BYPASS;
 
   /* properties */
   RNA_def_float(ot->srna,
@@ -1061,9 +1061,9 @@ static void change_frame_apply(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_scene(C);
 
   /* set the new frame number */
-  CFRA = RNA_int_get(op->ptr, "frame");
-  FRAMENUMBER_MIN_CLAMP(CFRA);
-  SUBFRA = 0.0f;
+  scene->r.cfra = RNA_int_get(op->ptr, "frame");
+  FRAMENUMBER_MIN_CLAMP(scene->r.cfra);
+  scene->r.subframe = 0.0f;
 
   /* do updates */
   DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
@@ -1084,7 +1084,7 @@ static int frame_from_event(bContext *C, const wmEvent *event)
   int framenr = 0;
 
   if (region->regiontype == RGN_TYPE_WINDOW) {
-    float sfra = SFRA, efra = EFRA, framelen = region->winx / (efra - sfra + 1);
+    float sfra = scene->r.sfra, efra = scene->r.efra, framelen = region->winx / (efra - sfra + 1);
 
     framenr = sfra + event->mval[0] / framelen;
   }
@@ -1399,7 +1399,7 @@ static void do_sequence_proxy(void *pjv,
   ProxyJob *pj = pjv;
   MovieClip *clip = pj->clip;
   Scene *scene = pj->scene;
-  int sfra = SFRA, efra = EFRA;
+  int sfra = scene->r.sfra, efra = scene->r.efra;
   ProxyThread *handles;
   int tot_thread = BLI_task_scheduler_num_threads();
   int width, height;
@@ -1611,7 +1611,9 @@ void CLIP_OT_mode_set(wmOperatorType *ot)
   ot->poll = ED_space_clip_poll;
 
   /* properties */
-  RNA_def_enum(ot->srna, "mode", rna_enum_clip_editor_mode_items, SC_MODE_TRACKING, "Mode", "");
+  ot->prop = RNA_def_enum(
+      ot->srna, "mode", rna_enum_clip_editor_mode_items, SC_MODE_TRACKING, "Mode", "");
+  RNA_def_property_translation_context(ot->prop, BLT_I18NCONTEXT_ID_MOVIECLIP);
 }
 
 /** \} */
@@ -1639,14 +1641,14 @@ static int clip_view_ndof_invoke(bContext *C, wmOperator *UNUSED(op), const wmEv
   float pan_vec[3];
 
   const wmNDOFMotionData *ndof = event->customdata;
-  const float speed = NDOF_PIXELS_PER_SECOND;
+  const float pan_speed = NDOF_PIXELS_PER_SECOND;
 
   WM_event_ndof_pan_get(ndof, pan_vec, true);
 
-  mul_v2_fl(pan_vec, (speed * ndof->dt) / sc->zoom);
-  pan_vec[2] *= -ndof->dt;
+  mul_v3_fl(pan_vec, ndof->dt);
+  mul_v2_fl(pan_vec, pan_speed / sc->zoom);
 
-  sclip_zoom_set_factor(C, 1.0f + pan_vec[2], NULL, false);
+  sclip_zoom_set_factor(C, max_ff(0.0f, 1.0f - pan_vec[2]), NULL, false);
   sc->xof += pan_vec[0];
   sc->yof += pan_vec[1];
 
@@ -1779,7 +1781,8 @@ static int clip_set_2d_cursor_exec(bContext *C, wmOperator *op)
 
   WM_event_add_notifier(C, NC_SPACE | ND_SPACE_CLIP, NULL);
 
-  return OPERATOR_FINISHED;
+  /* Use pass-through to allow click-drag to transform the cursor. */
+  return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
 }
 
 static int clip_set_2d_cursor_invoke(bContext *C, wmOperator *op, const wmEvent *event)

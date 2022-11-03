@@ -41,7 +41,7 @@ static void node_shader_buts_tangent(uiLayout *layout, bContext *C, PointerRNA *
   }
 }
 
-static void node_shader_init_tangent(bNodeTree *UNUSED(ntree), bNode *node)
+static void node_shader_init_tangent(bNodeTree * /*ntree*/, bNode *node)
 {
   NodeShaderTangent *attr = MEM_cnew<NodeShaderTangent>("NodeShaderTangent");
   attr->axis = SHD_TANGENT_AXIS_Z;
@@ -50,7 +50,7 @@ static void node_shader_init_tangent(bNodeTree *UNUSED(ntree), bNode *node)
 
 static int node_shader_gpu_tangent(GPUMaterial *mat,
                                    bNode *node,
-                                   bNodeExecData *UNUSED(execdata),
+                                   bNodeExecData * /*execdata*/,
                                    GPUNodeStack *in,
                                    GPUNodeStack *out)
 {
@@ -73,14 +73,7 @@ static int node_shader_gpu_tangent(GPUMaterial *mat,
     GPU_link(mat, "tangent_orco_z", orco, &orco);
   }
 
-  return GPU_stack_link(mat,
-                        node,
-                        "node_tangent",
-                        in,
-                        out,
-                        GPU_builtin(GPU_WORLD_NORMAL),
-                        orco,
-                        GPU_builtin(GPU_OBJECT_MATRIX));
+  return GPU_stack_link(mat, node, "node_tangent", in, out, orco);
 }
 
 }  // namespace blender::nodes::node_shader_tangent_cc

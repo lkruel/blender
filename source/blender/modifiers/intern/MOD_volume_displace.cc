@@ -12,6 +12,8 @@
 #include "BKE_texture.h"
 #include "BKE_volume.h"
 
+#include "BLT_translation.h"
+
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
@@ -35,6 +37,7 @@
 #include "RE_texture.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "BLI_math_vector.h"
 
@@ -81,9 +84,7 @@ static void foreachTexLink(ModifierData *md, Object *ob, TexWalkFunc walk, void 
   walk(userData, ob, md, "texture");
 }
 
-static bool dependsOnTime(struct Scene *UNUSED(scene),
-                          ModifierData *md,
-                          const int UNUSED(dag_eval_mode))
+static bool dependsOnTime(struct Scene * /*scene*/, ModifierData *md)
 {
   VolumeDisplaceModifierData *vdmd = reinterpret_cast<VolumeDisplaceModifierData *>(md);
   if (vdmd->texture) {
@@ -189,10 +190,8 @@ struct DisplaceGridOp {
 
   template<typename GridType> void operator()()
   {
-    if constexpr (blender::is_same_any_v<GridType,
-                                         openvdb::points::PointDataGrid,
-                                         openvdb::StringGrid,
-                                         openvdb::MaskGrid>) {
+    if constexpr (blender::
+                      is_same_any_v<GridType, openvdb::points::PointDataGrid, openvdb::MaskGrid>) {
       /* We don't support displacing these grid types yet. */
       return;
     }
@@ -214,7 +213,7 @@ struct DisplaceGridOp {
     const float sample_radius = vdmd.texture_sample_radius * std::abs(vdmd.strength) /
                                 max_voxel_side_length / 2.0f;
     openvdb::tools::dilateActiveValues(temp_grid->tree(),
-                                       static_cast<int>(std::ceil(sample_radius)),
+                                       int(std::ceil(sample_radius)),
                                        openvdb::tools::NN_FACE_EDGE,
                                        openvdb::tools::EXPAND_TILES);
 
@@ -255,15 +254,16 @@ struct DisplaceGridOp {
         return index_to_object;
       }
       case MOD_VOLUME_DISPLACE_MAP_GLOBAL: {
-        const openvdb::Mat4s object_to_world = matrix_to_openvdb(ctx.object->obmat);
+        const openvdb::Mat4s object_to_world = matrix_to_openvdb(ctx.object->object_to_world);
         return index_to_object * object_to_world;
       }
       case MOD_VOLUME_DISPLACE_MAP_OBJECT: {
         if (vdmd.texture_map_object == nullptr) {
           return index_to_object;
         }
-        const openvdb::Mat4s object_to_world = matrix_to_openvdb(ctx.object->obmat);
-        const openvdb::Mat4s world_to_texture = matrix_to_openvdb(vdmd.texture_map_object->imat);
+        const openvdb::Mat4s object_to_world = matrix_to_openvdb(ctx.object->object_to_world);
+        const openvdb::Mat4s world_to_texture = matrix_to_openvdb(
+            vdmd.texture_map_object->world_to_object);
         return index_to_object * object_to_world * world_to_texture;
       }
     }
@@ -310,7 +310,7 @@ static void modifyGeometrySet(ModifierData *md,
 }
 
 ModifierTypeInfo modifierType_VolumeDisplace = {
-    /* name */ "Volume Displace",
+    /* name */ N_("Volume Displace"),
     /* structName */ "VolumeDisplaceModifierData",
     /* structSize */ sizeof(VolumeDisplaceModifierData),
     /* srna */ &RNA_VolumeDisplaceModifier,

@@ -36,6 +36,7 @@
 #include "UI_resources.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_query.h"
@@ -58,9 +59,7 @@ static void initData(ModifierData *md)
   MEMCPY_STRUCT_AFTER(dmd, DNA_struct_default_get(DisplaceModifierData), modifier);
 }
 
-static void requiredDataMask(Object *UNUSED(ob),
-                             ModifierData *md,
-                             CustomData_MeshMasks *r_cddata_masks)
+static void requiredDataMask(ModifierData *md, CustomData_MeshMasks *r_cddata_masks)
 {
   DisplaceModifierData *dmd = (DisplaceModifierData *)md;
 
@@ -79,9 +78,7 @@ static void requiredDataMask(Object *UNUSED(ob),
   }
 }
 
-static bool dependsOnTime(struct Scene *UNUSED(scene),
-                          ModifierData *md,
-                          const int UNUSED(dag_eval_mode))
+static bool dependsOnTime(struct Scene *UNUSED(scene), ModifierData *md)
 {
   DisplaceModifierData *dmd = (DisplaceModifierData *)md;
 
@@ -143,7 +140,7 @@ static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphConte
   }
 
   if (need_transform_relation) {
-    DEG_add_modifier_to_transform_relation(ctx->node, "Displace Modifier");
+    DEG_add_depends_on_transform_relation(ctx->node, "Displace Modifier");
   }
 }
 
@@ -151,7 +148,7 @@ typedef struct DisplaceUserdata {
   /*const*/ DisplaceModifierData *dmd;
   struct Scene *scene;
   struct ImagePool *pool;
-  MDeformVert *dvert;
+  const MDeformVert *dvert;
   float weight;
   int defgrp_index;
   int direction;
@@ -171,7 +168,7 @@ static void displaceModifier_do_task(void *__restrict userdata,
 {
   DisplaceUserdata *data = (DisplaceUserdata *)userdata;
   DisplaceModifierData *dmd = data->dmd;
-  MDeformVert *dvert = data->dvert;
+  const MDeformVert *dvert = data->dvert;
   const bool invert_vgroup = (dmd->flag & MOD_DISP_INVERT_VGROUP) != 0;
   float weight = data->weight;
   int defgrp_index = data->defgrp_index;
@@ -198,7 +195,6 @@ static void displaceModifier_do_task(void *__restrict userdata,
   }
 
   if (data->tex_target) {
-    texres.nor = NULL;
     BKE_texture_get_value_ex(
         data->scene, data->tex_target, tex_co[iter], &texres, data->pool, false);
     delta = texres.tin - dmd->midlevel;
@@ -268,11 +264,11 @@ static void displaceModifier_do(DisplaceModifierData *dmd,
                                 const ModifierEvalContext *ctx,
                                 Mesh *mesh,
                                 float (*vertexCos)[3],
-                                const int numVerts)
+                                const int verts_num)
 {
   Object *ob = ctx->object;
   MVert *mvert;
-  MDeformVert *dvert;
+  const MDeformVert *dvert;
   int direction = dmd->direction;
   int defgrp_index;
   float(*tex_co)[3];
@@ -288,7 +284,7 @@ static void displaceModifier_do(DisplaceModifierData *dmd,
     return;
   }
 
-  mvert = mesh->mvert;
+  mvert = BKE_mesh_verts_for_write(mesh);
   MOD_get_vgroup(ob, mesh, dmd->defgrp_name, &dvert, &defgrp_index);
 
   if (defgrp_index >= 0 && dvert == NULL) {
@@ -298,7 +294,7 @@ static void displaceModifier_do(DisplaceModifierData *dmd,
 
   Tex *tex_target = dmd->texture;
   if (tex_target != NULL) {
-    tex_co = MEM_calloc_arrayN((size_t)numVerts, sizeof(*tex_co), "displaceModifier_do tex_co");
+    tex_co = MEM_calloc_arrayN((size_t)verts_num, sizeof(*tex_co), "displaceModifier_do tex_co");
     MOD_get_texture_coords((MappingInfoModifierData *)dmd, ctx, ob, mesh, vertexCos, tex_co);
 
     MOD_init_texture((MappingInfoModifierData *)dmd, ctx);
@@ -311,17 +307,14 @@ static void displaceModifier_do(DisplaceModifierData *dmd,
     CustomData *ldata = &mesh->ldata;
 
     if (CustomData_has_layer(ldata, CD_CUSTOMLOOPNORMAL)) {
-      float(*clnors)[3] = NULL;
-
-      if ((mesh->runtime.cd_dirty_vert & CD_MASK_NORMAL) ||
-          !CustomData_has_layer(ldata, CD_NORMAL)) {
+      if (!CustomData_has_layer(ldata, CD_NORMAL)) {
         BKE_mesh_calc_normals_split(mesh);
       }
 
-      clnors = CustomData_get_layer(ldata, CD_NORMAL);
-      vert_clnors = MEM_malloc_arrayN(numVerts, sizeof(*vert_clnors), __func__);
+      float(*clnors)[3] = CustomData_get_layer(ldata, CD_NORMAL);
+      vert_clnors = MEM_malloc_arrayN(verts_num, sizeof(*vert_clnors), __func__);
       BKE_mesh_normals_loop_to_vertex(
-          numVerts, mesh->mloop, mesh->totloop, (const float(*)[3])clnors, vert_clnors);
+          verts_num, BKE_mesh_loops(mesh), mesh->totloop, (const float(*)[3])clnors, vert_clnors);
     }
     else {
       direction = MOD_DISP_DIR_NOR;
@@ -329,7 +322,7 @@ static void displaceModifier_do(DisplaceModifierData *dmd,
   }
   else if (ELEM(direction, MOD_DISP_DIR_X, MOD_DISP_DIR_Y, MOD_DISP_DIR_Z, MOD_DISP_DIR_RGB_XYZ) &&
            use_global_direction) {
-    copy_m4_m4(local_mat, ob->obmat);
+    copy_m4_m4(local_mat, ob->object_to_world);
   }
 
   DisplaceUserdata data = {NULL};
@@ -355,8 +348,8 @@ static void displaceModifier_do(DisplaceModifierData *dmd,
   }
   TaskParallelSettings settings;
   BLI_parallel_range_settings_defaults(&settings);
-  settings.use_threading = (numVerts > 512);
-  BLI_task_parallel_range(0, numVerts, &data, displaceModifier_do_task, &settings);
+  settings.use_threading = (verts_num > 512);
+  BLI_task_parallel_range(0, verts_num, &data, displaceModifier_do_task, &settings);
 
   if (data.pool != NULL) {
     BKE_image_pool_free(data.pool);
@@ -375,11 +368,11 @@ static void deformVerts(ModifierData *md,
                         const ModifierEvalContext *ctx,
                         Mesh *mesh,
                         float (*vertexCos)[3],
-                        int numVerts)
+                        int verts_num)
 {
-  Mesh *mesh_src = MOD_deform_mesh_eval_get(ctx->object, NULL, mesh, NULL, numVerts, false, false);
+  Mesh *mesh_src = MOD_deform_mesh_eval_get(ctx->object, NULL, mesh, NULL, verts_num, false);
 
-  displaceModifier_do((DisplaceModifierData *)md, ctx, mesh_src, vertexCos, numVerts);
+  displaceModifier_do((DisplaceModifierData *)md, ctx, mesh_src, vertexCos, verts_num);
 
   if (!ELEM(mesh_src, NULL, mesh)) {
     BKE_id_free(NULL, mesh_src);
@@ -391,17 +384,16 @@ static void deformVertsEM(ModifierData *md,
                           struct BMEditMesh *editData,
                           Mesh *mesh,
                           float (*vertexCos)[3],
-                          int numVerts)
+                          int verts_num)
 {
-  Mesh *mesh_src = MOD_deform_mesh_eval_get(
-      ctx->object, editData, mesh, NULL, numVerts, false, false);
+  Mesh *mesh_src = MOD_deform_mesh_eval_get(ctx->object, editData, mesh, NULL, verts_num, false);
 
-  /* TODO(Campbell): use edit-mode data only (remove this line). */
+  /* TODO(@campbellbarton): use edit-mode data only (remove this line). */
   if (mesh_src != NULL) {
     BKE_mesh_wrapper_ensure_mdata(mesh_src);
   }
 
-  displaceModifier_do((DisplaceModifierData *)md, ctx, mesh_src, vertexCos, numVerts);
+  displaceModifier_do((DisplaceModifierData *)md, ctx, mesh_src, vertexCos, verts_num);
 
   if (!ELEM(mesh_src, NULL, mesh)) {
     BKE_id_free(NULL, mesh_src);
@@ -477,7 +469,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 ModifierTypeInfo modifierType_Displace = {
-    /* name */ "Displace",
+    /* name */ N_("Displace"),
     /* structName */ "DisplaceModifierData",
     /* structSize */ sizeof(DisplaceModifierData),
     /* srna */ &RNA_DisplaceModifier,

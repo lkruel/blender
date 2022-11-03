@@ -60,7 +60,7 @@ class MultiFunction {
     return get_default_hash(this);
   }
 
-  virtual bool equals(const MultiFunction &UNUSED(other)) const
+  virtual bool equals(const MultiFunction & /*other*/) const
   {
     return false;
   }
@@ -154,12 +154,10 @@ inline MFParamsBuilder::MFParamsBuilder(const MultiFunction &fn, const IndexMask
 }
 
 namespace multi_function_types {
-using fn::CPPType;
-using fn::GMutableSpan;
-using fn::GSpan;
 using fn::MFContext;
 using fn::MFContextBuilder;
 using fn::MFDataType;
+using fn::MFParamCategory;
 using fn::MFParams;
 using fn::MFParamsBuilder;
 using fn::MFParamType;

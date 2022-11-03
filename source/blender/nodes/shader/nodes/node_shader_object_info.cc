@@ -9,6 +9,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_output<decl::Vector>(N_("Location"));
   b.add_output<decl::Color>(N_("Color"));
+  b.add_output<decl::Float>(N_("Alpha"));
   b.add_output<decl::Float>(N_("Object Index"));
   b.add_output<decl::Float>(N_("Material Index"));
   b.add_output<decl::Float>(N_("Random"));
@@ -16,21 +17,14 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static int node_shader_gpu_object_info(GPUMaterial *mat,
                                        bNode *node,
-                                       bNodeExecData *UNUSED(execdata),
+                                       bNodeExecData * /*execdata*/,
                                        GPUNodeStack *in,
                                        GPUNodeStack *out)
 {
   Material *ma = GPU_material_get_material(mat);
   float index = ma ? ma->index : 0.0f;
-  return GPU_stack_link(mat,
-                        node,
-                        "node_object_info",
-                        in,
-                        out,
-                        GPU_builtin(GPU_OBJECT_MATRIX),
-                        GPU_builtin(GPU_OBJECT_COLOR),
-                        GPU_builtin(GPU_OBJECT_INFO),
-                        GPU_constant(&index));
+  GPU_material_flag_set(mat, GPU_MATFLAG_OBJECT_INFO);
+  return GPU_stack_link(mat, node, "node_object_info", in, out, GPU_constant(&index));
 }
 
 }  // namespace blender::nodes::node_shader_object_info_cc

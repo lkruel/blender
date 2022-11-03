@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# <pep8 compliant>
-
 # For documentation on tool definitions: see "bl_ui.space_toolsystem_common.ToolDef"
 # where there are comments for each field and their use.
 
@@ -89,7 +87,6 @@ class _defs_view3d_generic:
             icon="ops.generic.cursor",
             keymap="3D View Tool: Cursor",
             draw_settings=draw_settings,
-            options={'KEYMAP_FALLBACK'},
         )
 
     @ToolDef.from_fn
@@ -128,7 +125,6 @@ class _defs_view3d_generic:
             icon="ops.view3d.ruler",
             widget="VIEW3D_GGT_ruler",
             keymap="3D View Tool: Measure",
-            options={'KEYMAP_FALLBACK'},
         )
 
 
@@ -263,9 +259,15 @@ class _defs_annotate:
 
 class _defs_transform:
 
+    def draw_transform_sculpt_tool_settings(context, layout):
+        if context.mode != 'SCULPT':
+            return
+        layout.prop(context.tool_settings.sculpt, "transform_mode")
+
     @ToolDef.from_fn
     def translate():
         def draw_settings(context, layout, _tool):
+            _defs_transform.draw_transform_sculpt_tool_settings(context, layout)
             _template_widget.VIEW3D_GGT_xform_gizmo.draw_settings_with_index(context, layout, 1)
         return dict(
             idname="builtin.move",
@@ -281,6 +283,7 @@ class _defs_transform:
     @ToolDef.from_fn
     def rotate():
         def draw_settings(context, layout, _tool):
+            _defs_transform.draw_transform_sculpt_tool_settings(context, layout)
             _template_widget.VIEW3D_GGT_xform_gizmo.draw_settings_with_index(context, layout, 2)
         return dict(
             idname="builtin.rotate",
@@ -296,6 +299,7 @@ class _defs_transform:
     @ToolDef.from_fn
     def scale():
         def draw_settings(context, layout, _tool):
+            _defs_transform.draw_transform_sculpt_tool_settings(context, layout)
             _template_widget.VIEW3D_GGT_xform_gizmo.draw_settings_with_index(context, layout, 3)
         return dict(
             idname="builtin.scale",
@@ -351,6 +355,7 @@ class _defs_transform:
                 props = tool.gizmo_group_properties("VIEW3D_GGT_xform_gizmo")
                 layout.prop(props, "drag_action")
 
+            _defs_transform.draw_transform_sculpt_tool_settings(context, layout)
             _template_widget.VIEW3D_GGT_xform_gizmo.draw_settings_with_index(context, layout, 1)
 
         return dict(
@@ -523,7 +528,6 @@ class _defs_view3d_add:
             widget="VIEW3D_GGT_placement",
             keymap="3D View Tool: Object, Add Primitive",
             draw_settings=draw_settings,
-            options={'KEYMAP_FALLBACK'},
         )
 
     @ToolDef.from_fn
@@ -550,7 +554,6 @@ class _defs_view3d_add:
             widget="VIEW3D_GGT_placement",
             keymap="3D View Tool: Object, Add Primitive",
             draw_settings=draw_settings,
-            options={'KEYMAP_FALLBACK'},
         )
 
     @ToolDef.from_fn
@@ -576,7 +579,6 @@ class _defs_view3d_add:
             widget="VIEW3D_GGT_placement",
             keymap="3D View Tool: Object, Add Primitive",
             draw_settings=draw_settings,
-            options={'KEYMAP_FALLBACK'},
         )
 
     @ToolDef.from_fn
@@ -602,7 +604,6 @@ class _defs_view3d_add:
             widget="VIEW3D_GGT_placement",
             keymap="3D View Tool: Object, Add Primitive",
             draw_settings=draw_settings,
-            options={'KEYMAP_FALLBACK'},
         )
 
     @ToolDef.from_fn
@@ -627,7 +628,6 @@ class _defs_view3d_add:
             widget="VIEW3D_GGT_placement",
             keymap="3D View Tool: Object, Add Primitive",
             draw_settings=draw_settings,
-            options={'KEYMAP_FALLBACK'},
         )
 
 
@@ -1065,11 +1065,8 @@ class _defs_edit_mesh:
             show_extra = False
             props = tool.operator_properties("mesh.knife_tool")
             if not extra:
-                row = layout.row()
                 layout.prop(props, "use_occlude_geometry")
-                row = layout.row()
                 layout.prop(props, "only_selected")
-                row = layout.row()
                 layout.prop(props, "xray")
                 region_is_header = bpy.context.region.type == 'TOOL_HEADER'
                 if region_is_header:
@@ -1077,11 +1074,13 @@ class _defs_edit_mesh:
                 else:
                     extra = True
             if extra:
+                layout.use_property_decorate = False
                 layout.use_property_split = True
+
                 layout.prop(props, "visible_measurements")
                 layout.prop(props, "angle_snapping")
                 layout.label(text="Angle Snapping Increment")
-                layout.row().prop(props, "angle_snapping_increment", text="", expand=True)
+                layout.prop(props, "angle_snapping_increment", text="")
             if show_extra:
                 layout.popover("TOPBAR_PT_tool_settings_extra", text="...")
         return dict(
@@ -1205,6 +1204,22 @@ class _defs_edit_curve:
         )
 
     @ToolDef.from_fn
+    def pen():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("curve.pen")
+            layout.prop(props, "close_spline")
+            layout.prop(props, "extrude_handle")
+        return dict(
+            idname="builtin.pen",
+            label="Curve Pen",
+            cursor='CROSSHAIR',
+            icon="ops.curve.pen",
+            widget=None,
+            keymap=(),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
     def tilt():
         return dict(
             idname="builtin.tilt",
@@ -1294,19 +1309,12 @@ class _defs_sculpt:
 
     @staticmethod
     def generate_from_brushes(context):
-        exclude_filter = {}
-        # Use 'bpy.context' instead of 'context' since it can be None.
-        prefs = bpy.context.preferences
-        if not prefs.experimental.use_sculpt_vertex_colors:
-            exclude_filter = {'PAINT', 'SMEAR'}
-
         return generate_from_enum_ex(
             context,
             idname_prefix="builtin_brush.",
             icon_prefix="brush.sculpt.",
             type=bpy.types.Brush,
             attr="sculpt_tool",
-            exclude_filter=exclude_filter,
         )
 
     @ToolDef.from_fn
@@ -1700,7 +1708,6 @@ class _defs_image_generic:
             ),
             icon="ops.generic.cursor",
             keymap=(),
-            options={'KEYMAP_FALLBACK'},
         )
 
     # Currently a place holder so we can switch away from the annotation tool.
@@ -1874,7 +1881,7 @@ class _defs_image_uv_sculpt:
                 if brush is None:
                     return
                 radius = brush.size
-            draw_circle_2d(xy, (1.0,) * 4, radius, segments=32)
+            draw_circle_2d(xy, (1.0,) * 4, radius)
 
         return generate_from_enum_ex(
             context,
@@ -2306,6 +2313,108 @@ class _defs_gpencil_weight:
         )
 
 
+class _defs_curves_sculpt:
+
+    @ToolDef.from_fn
+    def selection_paint():
+        return dict(
+            idname="builtin_brush.selection_paint",
+            label="Selection Paint",
+            icon="ops.generic.select_paint",
+            data_block="SELECTION_PAINT"
+        )
+
+    @ToolDef.from_fn
+    def comb():
+        return dict(
+            idname="builtin_brush.comb",
+            label="Comb",
+            icon="ops.curves.sculpt_comb",
+            data_block='COMB'
+        )
+
+    @ToolDef.from_fn
+    def add():
+        return dict(
+            idname="builtin_brush.add",
+            label="Add",
+            icon="ops.curves.sculpt_add",
+            data_block='ADD'
+        )
+
+    @ToolDef.from_fn
+    def delete():
+        return dict(
+            idname="builtin_brush.delete",
+            label="Delete",
+            icon="ops.curves.sculpt_delete",
+            data_block='DELETE'
+        )
+
+    @ToolDef.from_fn
+    def snake_hook():
+        return dict(
+            idname="builtin_brush.snake_hook",
+            label="Snake Hook",
+            icon="ops.curves.sculpt_snake_hook",
+            data_block='SNAKE_HOOK'
+        )
+
+    @ToolDef.from_fn
+    def grow_shrink():
+        return dict(
+            idname="builtin_brush.grow_shrink",
+            label="Grow/Shrink",
+            icon="ops.curves.sculpt_grow_shrink",
+            data_block='GROW_SHRINK'
+        )
+
+    @ToolDef.from_fn
+    def pinch():
+        return dict(
+            idname="builtin_brush.pinch",
+            label="Pinch",
+            icon="ops.curves.sculpt_pinch",
+            data_block='PINCH'
+        )
+
+    @ToolDef.from_fn
+    def smooth():
+        return dict(
+            idname="builtin_brush.smooth",
+            label="Smooth",
+            icon="ops.curves.sculpt_smooth",
+            data_block='SMOOTH'
+        )
+
+    @ToolDef.from_fn
+    def puff():
+        return dict(
+            idname="builtin_brush.puff",
+            label="Puff",
+            icon="ops.curves.sculpt_puff",
+            data_block='PUFF'
+        )
+
+    @ToolDef.from_fn
+    def density():
+        return dict(
+            idname="builtin_brush.density",
+            label="Density",
+            icon="ops.curves.sculpt_density",
+            data_block="DENSITY"
+        )
+
+    @ToolDef.from_fn
+    def slide():
+        return dict(
+            idname="builtin_brush.slide",
+            label="Slide",
+            icon="ops.curves.sculpt_slide",
+            data_block="SLIDE"
+        )
+
+
 class _defs_gpencil_vertex:
 
     @staticmethod
@@ -2429,7 +2538,6 @@ class _defs_sequencer_generic:
             ),
             icon="ops.generic.cursor",
             keymap="Sequencer Tool: Cursor",
-            options={'KEYMAP_FALLBACK'},
         )
 
     @ToolDef.from_fn
@@ -2506,7 +2614,8 @@ class _defs_sequencer_generic:
             icon="ops.transform.transform",
             widget="SEQUENCER_GGT_gizmo2d",
             # No keymap default action, only for gizmo!
-       )
+        )
+
 
 class _defs_sequencer_select:
     @ToolDef.from_fn
@@ -2871,6 +2980,7 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             *_tools_default,
             None,
             _defs_edit_curve.draw,
+            _defs_edit_curve.pen,
             (
                 _defs_edit_curve.extrude,
                 _defs_edit_curve.extrude_cursor,
@@ -2930,23 +3040,10 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             None,
             _defs_sculpt.mesh_filter,
             _defs_sculpt.cloth_filter,
-            lambda context: (
-                (_defs_sculpt.color_filter,)
-                if context is None or (
-                        context.preferences.view.show_developer_ui and
-                        context.preferences.experimental.use_sculpt_vertex_colors)
-                else ()
-            ),
-            None,
-            lambda context: (
-                (_defs_sculpt.mask_by_color,)
-                if context is None or (
-                        context.preferences.view.show_developer_ui and
-                        context.preferences.experimental.use_sculpt_vertex_colors)
-                else ()
-            ),
+            _defs_sculpt.color_filter,
             None,
             _defs_sculpt.face_set_edit,
+            _defs_sculpt.mask_by_color,
             None,
             _defs_transform.translate,
             _defs_transform.rotate,
@@ -3064,6 +3161,23 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
                 if _defs_gpencil_vertex.poll_select_mask(context)
                 else ()
             ),
+        ],
+        'SCULPT_CURVES': [
+            _defs_curves_sculpt.selection_paint,
+            None,
+            _defs_curves_sculpt.add,
+            _defs_curves_sculpt.delete,
+            _defs_curves_sculpt.density,
+            None,
+            _defs_curves_sculpt.comb,
+            _defs_curves_sculpt.snake_hook,
+            _defs_curves_sculpt.grow_shrink,
+            _defs_curves_sculpt.pinch,
+            _defs_curves_sculpt.puff,
+            _defs_curves_sculpt.smooth,
+            _defs_curves_sculpt.slide,
+            None,
+            *_tools_annotate,
         ],
     }
 

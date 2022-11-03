@@ -51,10 +51,8 @@ static void cache_node_free(void *node);
 
 static void update_cache_free(GPencilUpdateCache *cache)
 {
-  if (cache->children != NULL) {
-    BLI_dlrbTree_free(cache->children, cache_node_free);
-    MEM_freeN(cache->children);
-  }
+  BLI_dlrbTree_free(cache->children, cache_node_free);
+  MEM_SAFE_FREE(cache->children);
   MEM_freeN(cache);
 }
 
@@ -83,9 +81,8 @@ static void cache_node_update(void *node, void *data)
 
   /* In case the new cache does a full update, remove its children since they will be all
    * updated by this cache. */
-  if (new_update_cache->flag == GP_UPDATE_NODE_FULL_COPY && update_cache->children != NULL) {
+  if (new_update_cache->flag == GP_UPDATE_NODE_FULL_COPY) {
     BLI_dlrbTree_free(update_cache->children, cache_node_free);
-    MEM_freeN(update_cache->children);
   }
 
   update_cache_free(new_update_cache);
@@ -99,7 +96,7 @@ static void update_cache_node_create_ex(GPencilUpdateCache *root_cache,
                                         bool full_copy)
 {
   if (root_cache->flag == GP_UPDATE_NODE_FULL_COPY) {
-    /* Entire data-block has to be recaculated, e.g. nothing else needs to be added to the cache.
+    /* Entire data-block has to be recalculated, e.g. nothing else needs to be added to the cache.
      */
     return;
   }
@@ -110,14 +107,14 @@ static void update_cache_node_create_ex(GPencilUpdateCache *root_cache,
     root_cache->data = (bGPdata *)data;
     root_cache->flag = node_flag;
     if (full_copy) {
-      /* Entire data-block has to be recaculated, remove all caches of "lower" elements. */
+      /* Entire data-block has to be recalculated, remove all caches of "lower" elements. */
       BLI_dlrbTree_free(root_cache->children, cache_node_free);
     }
     return;
   }
 
   const bool is_layer_update_node = (gpf_index == -1);
-  /* If the data pointer in GPencilUpdateCache is NULL, this element is not actually cached
+  /* If the data pointer in #GPencilUpdateCache is NULL, this element is not actually cached
    * and does not need to be updated, but we do need the index to find elements that are in
    * levels below. E.g. if a stroke needs to be updated, the frame it is in would not hold a
    * pointer to it's data. */
@@ -174,7 +171,7 @@ static void update_cache_node_create(
   }
 
   if (root_cache->flag == GP_UPDATE_NODE_FULL_COPY) {
-    /* Entire data-block has to be recaculated, e.g. nothing else needs to be added to the cache.
+    /* Entire data-block has to be recalculated, e.g. nothing else needs to be added to the cache.
      */
     return;
   }

@@ -24,20 +24,13 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static int gpu_shader_particle_info(GPUMaterial *mat,
                                     bNode *node,
-                                    bNodeExecData *UNUSED(execdata),
+                                    bNodeExecData * /*execdata*/,
                                     GPUNodeStack *in,
                                     GPUNodeStack *out)
 {
-
-  return GPU_stack_link(mat,
-                        node,
-                        "particle_info",
-                        in,
-                        out,
-                        GPU_builtin(GPU_PARTICLE_SCALAR_PROPS),
-                        GPU_builtin(GPU_PARTICLE_LOCATION),
-                        GPU_builtin(GPU_PARTICLE_VELOCITY),
-                        GPU_builtin(GPU_PARTICLE_ANG_VELOCITY));
+  GPU_material_flag_set(mat, GPU_MATFLAG_OBJECT_INFO);
+  /* TODO(fclem) Pass particle data in obinfo. */
+  return GPU_stack_link(mat, node, "particle_info", in, out);
 }
 
 }  // namespace blender::nodes::node_shader_particle_info_cc

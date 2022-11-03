@@ -39,18 +39,26 @@ struct KernelGlobalsCPU;
  * with additional data.
  *
  * These are stored in a concurrent hash map, because OSL can compile multiple
- * shaders in parallel. */
+ * shaders in parallel.
+ *
+ * NOTE: The svm_slots array contains a compressed mapping of tile to svm_slot pairs
+ * stored as follows: x:tile_a, y:svm_slot_a, z:tile_b, w:svm_slot_b etc. */
 
 struct OSLTextureHandle : public OIIO::RefCnt {
   enum Type { OIIO, SVM, IES, BEVEL, AO };
 
+  OSLTextureHandle(Type type, const vector<int4> &svm_slots)
+      : type(type), svm_slots(svm_slots), oiio_handle(NULL), processor(NULL)
+  {
+  }
+
   OSLTextureHandle(Type type = OIIO, int svm_slot = -1)
-      : type(type), svm_slot(svm_slot), oiio_handle(NULL), processor(NULL)
+      : OSLTextureHandle(type, {make_int4(0, svm_slot, -1, -1)})
   {
   }
 
   Type type;
-  int svm_slot;
+  vector<int4> svm_slots;
   OSL::TextureSystem::TextureHandle *oiio_handle;
   ColorSpaceProcessor *processor;
 };
@@ -67,6 +75,8 @@ class OSLRenderServices : public OSL::RendererServices {
  public:
   OSLRenderServices(OSL::TextureSystem *texture_system);
   ~OSLRenderServices();
+
+  static void register_closures(OSL::ShadingSystem *ss);
 
   bool get_matrix(OSL::ShaderGlobals *sg,
                   OSL::Matrix44 &result,
@@ -259,6 +269,7 @@ class OSLRenderServices : public OSL::RendererServices {
   static ustring u_ndc;
   static ustring u_object_location;
   static ustring u_object_color;
+  static ustring u_object_alpha;
   static ustring u_object_index;
   static ustring u_geom_dupli_generated;
   static ustring u_geom_dupli_uv;
@@ -312,7 +323,6 @@ class OSLRenderServices : public OSL::RendererServices {
    * globals to be shared between different render sessions. This saves memory,
    * and is required because texture handles are cached as part of the shared
    * shading system. */
-  OSL::TextureSystem *texture_system;
   OSLTextureHandleMap textures;
 };
 

@@ -16,6 +16,7 @@ set(SRC_OSL
   node_camera.osl
   node_checker_texture.osl
   node_clamp.osl
+  node_combine_color.osl
   node_combine_rgb.osl
   node_combine_hsv.osl
   node_combine_xyz.osl
@@ -56,6 +57,10 @@ set(SRC_OSL
   node_math.osl
   node_mix.osl
   node_mix_closure.osl
+  node_mix_color.osl
+  node_mix_float.osl
+  node_mix_vector.osl
+  node_mix_vector_non_uniform.osl
   node_musgrave_texture.osl
   node_noise_texture.osl
   node_normal.osl
@@ -68,6 +73,7 @@ set(SRC_OSL
   node_refraction_bsdf.osl
   node_rgb_curves.osl
   node_rgb_ramp.osl
+  node_separate_color.osl
   node_separate_rgb.osl
   node_separate_hsv.osl
   node_separate_xyz.osl
@@ -107,6 +113,7 @@ file(GLOB SRC_OSL_HEADER_DIST ${OSL_SHADER_DIR}/*.h)
 
 set(SRC_OSL_HEADERS
   node_color.h
+  node_color_blend.h
   node_fresnel.h
   node_hash.h
   node_math.h

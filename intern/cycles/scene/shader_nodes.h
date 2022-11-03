@@ -1101,6 +1101,63 @@ class MixNode : public ShaderNode {
   NODE_SOCKET_API(float, fac)
 };
 
+class MixColorNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(MixColorNode)
+  void constant_fold(const ConstantFolder &folder);
+
+  NODE_SOCKET_API(float3, a)
+  NODE_SOCKET_API(float3, b)
+  NODE_SOCKET_API(float, fac)
+  NODE_SOCKET_API(bool, use_clamp)
+  NODE_SOCKET_API(bool, use_clamp_result)
+  NODE_SOCKET_API(NodeMix, blend_type)
+};
+
+class MixFloatNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(MixFloatNode)
+  void constant_fold(const ConstantFolder &folder);
+
+  NODE_SOCKET_API(float, a)
+  NODE_SOCKET_API(float, b)
+  NODE_SOCKET_API(float, fac)
+  NODE_SOCKET_API(bool, use_clamp)
+};
+
+class MixVectorNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(MixVectorNode)
+  void constant_fold(const ConstantFolder &folder);
+
+  NODE_SOCKET_API(float3, a)
+  NODE_SOCKET_API(float3, b)
+  NODE_SOCKET_API(float, fac)
+  NODE_SOCKET_API(bool, use_clamp)
+};
+
+class MixVectorNonUniformNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(MixVectorNonUniformNode)
+  void constant_fold(const ConstantFolder &folder);
+
+  NODE_SOCKET_API(float3, a)
+  NODE_SOCKET_API(float3, b)
+  NODE_SOCKET_API(float3, fac)
+  NODE_SOCKET_API(bool, use_clamp)
+};
+
+class CombineColorNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(CombineColorNode)
+  void constant_fold(const ConstantFolder &folder);
+
+  NODE_SOCKET_API(NodeCombSepColorType, color_type)
+  NODE_SOCKET_API(float, r)
+  NODE_SOCKET_API(float, g)
+  NODE_SOCKET_API(float, b)
+};
+
 class CombineRGBNode : public ShaderNode {
  public:
   SHADER_NODE_CLASS(CombineRGBNode)
@@ -1148,6 +1205,15 @@ class BrightContrastNode : public ShaderNode {
   NODE_SOCKET_API(float3, color)
   NODE_SOCKET_API(float, bright)
   NODE_SOCKET_API(float, contrast)
+};
+
+class SeparateColorNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(SeparateColorNode)
+  void constant_fold(const ConstantFolder &folder);
+
+  NODE_SOCKET_API(NodeCombSepColorType, color_type)
+  NODE_SOCKET_API(float3, color)
 };
 
 class SeparateRGBNode : public ShaderNode {
@@ -1391,6 +1457,7 @@ class CurvesNode : public ShaderNode {
   NODE_SOCKET_API(float, max_x)
   NODE_SOCKET_API(float, fac)
   NODE_SOCKET_API(float3, value)
+  NODE_SOCKET_API(bool, extrapolate)
 
  protected:
   using ShaderNode::constant_fold;
@@ -1421,6 +1488,7 @@ class FloatCurveNode : public ShaderNode {
   NODE_SOCKET_API(float, max_x)
   NODE_SOCKET_API(float, fac)
   NODE_SOCKET_API(float, value)
+  NODE_SOCKET_API(bool, extrapolate)
 };
 
 class RGBRampNode : public ShaderNode {

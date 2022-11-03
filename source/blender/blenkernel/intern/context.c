@@ -41,6 +41,7 @@
 #include "RE_engine.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "CLG_log.h"
 
@@ -189,6 +190,22 @@ void CTX_store_set(bContext *C, bContextStore *store)
   C->wm.store = store;
 }
 
+const PointerRNA *CTX_store_ptr_lookup(const bContextStore *store,
+                                       const char *name,
+                                       const StructRNA *type)
+{
+  bContextStoreEntry *entry = BLI_rfindstring(
+      &store->entries, name, offsetof(bContextStoreEntry, name));
+  if (!entry) {
+    return NULL;
+  }
+
+  if (type && !RNA_struct_is_a(entry->ptr.type, type)) {
+    return NULL;
+  }
+  return &entry->ptr;
+}
+
 bContextStore *CTX_store_copy(bContextStore *store)
 {
   bContextStore *ctx = MEM_dupallocN(store);
@@ -323,11 +340,10 @@ static eContextResult ctx_data_get(bContext *C, const char *member, bContextData
   if (done != 1 && recursion < 1 && C->wm.store) {
     C->data.recursion = 1;
 
-    bContextStoreEntry *entry = BLI_rfindstring(
-        &C->wm.store->entries, member, offsetof(bContextStoreEntry, name));
+    const PointerRNA *ptr = CTX_store_ptr_lookup(C->wm.store, member, NULL);
 
-    if (entry) {
-      result->ptr = entry->ptr;
+    if (ptr) {
+      result->ptr = *ptr;
       done = 1;
     }
   }
@@ -377,37 +393,37 @@ static void *ctx_data_pointer_get(const bContext *C, const char *member)
   return NULL;
 }
 
-static int ctx_data_pointer_verify(const bContext *C, const char *member, void **pointer)
+static bool ctx_data_pointer_verify(const bContext *C, const char *member, void **pointer)
 {
   /* if context is NULL, pointer must be NULL too and that is a valid return */
   if (C == NULL) {
     *pointer = NULL;
-    return 1;
+    return true;
   }
 
   bContextDataResult result;
   if (ctx_data_get((bContext *)C, member, &result) == CTX_RESULT_OK) {
     BLI_assert(result.type == CTX_DATA_TYPE_POINTER);
     *pointer = result.ptr.data;
-    return 1;
+    return true;
   }
 
   *pointer = NULL;
-  return 0;
+  return false;
 }
 
-static int ctx_data_collection_get(const bContext *C, const char *member, ListBase *list)
+static bool ctx_data_collection_get(const bContext *C, const char *member, ListBase *list)
 {
   bContextDataResult result;
   if (ctx_data_get((bContext *)C, member, &result) == CTX_RESULT_OK) {
     BLI_assert(result.type == CTX_DATA_TYPE_COLLECTION);
     *list = result.list;
-    return 1;
+    return true;
   }
 
   BLI_listbase_clear(list);
 
-  return 0;
+  return false;
 }
 
 static int ctx_data_base_collection_get(const bContext *C, const char *member, ListBase *list)
@@ -424,6 +440,7 @@ static int ctx_data_base_collection_get(const bContext *C, const char *member, L
 
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
+  BKE_view_layer_synced_ensure(scene, view_layer);
 
   bool ok = false;
 
@@ -617,7 +634,7 @@ ListBase CTX_data_dir_get(const bContext *C)
 
 bool CTX_data_equals(const char *member, const char *str)
 {
-  return (STREQ(member, str));
+  return STREQ(member, str);
 }
 
 bool CTX_data_dir(const char *member)
@@ -664,7 +681,7 @@ void CTX_data_list_add_ptr(bContextDataResult *result, const PointerRNA *ptr)
   BLI_addtail(&result->list, link);
 }
 
-int ctx_data_list_count(const bContext *C, int (*func)(const bContext *, ListBase *))
+int ctx_data_list_count(const bContext *C, bool (*func)(const bContext *, ListBase *))
 {
   ListBase list;
 
@@ -1148,7 +1165,7 @@ enum eContextObjectMode CTX_data_mode_enum_ex(const Object *obedit,
     switch (obedit->type) {
       case OB_MESH:
         return CTX_MODE_EDIT_MESH;
-      case OB_CURVE:
+      case OB_CURVES_LEGACY:
         return CTX_MODE_EDIT_CURVE;
       case OB_SURF:
         return CTX_MODE_EDIT_SURFACE;
@@ -1160,6 +1177,8 @@ enum eContextObjectMode CTX_data_mode_enum_ex(const Object *obedit,
         return CTX_MODE_EDIT_METABALL;
       case OB_LATTICE:
         return CTX_MODE_EDIT_LATTICE;
+      case OB_CURVES:
+        return CTX_MODE_EDIT_CURVES;
     }
   }
   else {
@@ -1198,6 +1217,9 @@ enum eContextObjectMode CTX_data_mode_enum_ex(const Object *obedit,
       if (object_mode & OB_MODE_VERTEX_GPENCIL) {
         return CTX_MODE_VERTEX_GPENCIL;
       }
+      if (object_mode & OB_MODE_SCULPT_CURVES) {
+        return CTX_MODE_SCULPT_CURVES;
+      }
     }
   }
 
@@ -1217,11 +1239,28 @@ enum eContextObjectMode CTX_data_mode_enum(const bContext *C)
  * \note Must be aligned with above enum.
  */
 static const char *data_mode_strings[] = {
-    "mesh_edit",           "curve_edit",          "surface_edit",        "text_edit",
-    "armature_edit",       "mball_edit",          "lattice_edit",        "posemode",
-    "sculpt_mode",         "weightpaint",         "vertexpaint",         "imagepaint",
-    "particlemode",        "objectmode",          "greasepencil_paint",  "greasepencil_edit",
-    "greasepencil_sculpt", "greasepencil_weight", "greasepencil_vertex", NULL,
+    "mesh_edit",
+    "curve_edit",
+    "surface_edit",
+    "text_edit",
+    "armature_edit",
+    "mball_edit",
+    "lattice_edit",
+    "curves_edit",
+    "posemode",
+    "sculpt_mode",
+    "weightpaint",
+    "vertexpaint",
+    "imagepaint",
+    "particlemode",
+    "objectmode",
+    "greasepencil_paint",
+    "greasepencil_edit",
+    "greasepencil_sculpt",
+    "greasepencil_weight",
+    "greasepencil_vertex",
+    "curves_sculpt",
+    NULL,
 };
 BLI_STATIC_ASSERT(ARRAY_SIZE(data_mode_strings) == CTX_MODE_NUM + 1,
                   "Must have a string for each context mode")
@@ -1252,62 +1291,62 @@ ToolSettings *CTX_data_tool_settings(const bContext *C)
   return NULL;
 }
 
-int CTX_data_selected_ids(const bContext *C, ListBase *list)
+bool CTX_data_selected_ids(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "selected_ids", list);
 }
 
-int CTX_data_selected_nodes(const bContext *C, ListBase *list)
+bool CTX_data_selected_nodes(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "selected_nodes", list);
 }
 
-int CTX_data_selected_editable_objects(const bContext *C, ListBase *list)
+bool CTX_data_selected_editable_objects(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "selected_editable_objects", list);
 }
 
-int CTX_data_selected_editable_bases(const bContext *C, ListBase *list)
+bool CTX_data_selected_editable_bases(const bContext *C, ListBase *list)
 {
   return ctx_data_base_collection_get(C, "selected_editable_objects", list);
 }
 
-int CTX_data_editable_objects(const bContext *C, ListBase *list)
+bool CTX_data_editable_objects(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "editable_objects", list);
 }
 
-int CTX_data_editable_bases(const bContext *C, ListBase *list)
+bool CTX_data_editable_bases(const bContext *C, ListBase *list)
 {
   return ctx_data_base_collection_get(C, "editable_objects", list);
 }
 
-int CTX_data_selected_objects(const bContext *C, ListBase *list)
+bool CTX_data_selected_objects(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "selected_objects", list);
 }
 
-int CTX_data_selected_bases(const bContext *C, ListBase *list)
+bool CTX_data_selected_bases(const bContext *C, ListBase *list)
 {
   return ctx_data_base_collection_get(C, "selected_objects", list);
 }
 
-int CTX_data_visible_objects(const bContext *C, ListBase *list)
+bool CTX_data_visible_objects(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "visible_objects", list);
 }
 
-int CTX_data_visible_bases(const bContext *C, ListBase *list)
+bool CTX_data_visible_bases(const bContext *C, ListBase *list)
 {
   return ctx_data_base_collection_get(C, "visible_objects", list);
 }
 
-int CTX_data_selectable_objects(const bContext *C, ListBase *list)
+bool CTX_data_selectable_objects(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "selectable_objects", list);
 }
 
-int CTX_data_selectable_bases(const bContext *C, ListBase *list)
+bool CTX_data_selectable_bases(const bContext *C, ListBase *list)
 {
   return ctx_data_base_collection_get(C, "selectable_objects", list);
 }
@@ -1324,8 +1363,9 @@ struct Base *CTX_data_active_base(const bContext *C)
   if (ob == NULL) {
     return NULL;
   }
-
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
+  BKE_view_layer_synced_ensure(scene, view_layer);
   return BKE_view_layer_base_find(view_layer, ob);
 }
 
@@ -1364,22 +1404,22 @@ struct CacheFile *CTX_data_edit_cachefile(const bContext *C)
   return ctx_data_pointer_get(C, "edit_cachefile");
 }
 
-int CTX_data_selected_bones(const bContext *C, ListBase *list)
+bool CTX_data_selected_bones(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "selected_bones", list);
 }
 
-int CTX_data_selected_editable_bones(const bContext *C, ListBase *list)
+bool CTX_data_selected_editable_bones(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "selected_editable_bones", list);
 }
 
-int CTX_data_visible_bones(const bContext *C, ListBase *list)
+bool CTX_data_visible_bones(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "visible_bones", list);
 }
 
-int CTX_data_editable_bones(const bContext *C, ListBase *list)
+bool CTX_data_editable_bones(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "editable_bones", list);
 }
@@ -1389,17 +1429,17 @@ struct bPoseChannel *CTX_data_active_pose_bone(const bContext *C)
   return ctx_data_pointer_get(C, "active_pose_bone");
 }
 
-int CTX_data_selected_pose_bones(const bContext *C, ListBase *list)
+bool CTX_data_selected_pose_bones(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "selected_pose_bones", list);
 }
 
-int CTX_data_selected_pose_bones_from_active_object(const bContext *C, ListBase *list)
+bool CTX_data_selected_pose_bones_from_active_object(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "selected_pose_bones_from_active_object", list);
 }
 
-int CTX_data_visible_pose_bones(const bContext *C, ListBase *list)
+bool CTX_data_visible_pose_bones(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "visible_pose_bones", list);
 }
@@ -1419,17 +1459,17 @@ bGPDframe *CTX_data_active_gpencil_frame(const bContext *C)
   return ctx_data_pointer_get(C, "active_gpencil_frame");
 }
 
-int CTX_data_visible_gpencil_layers(const bContext *C, ListBase *list)
+bool CTX_data_visible_gpencil_layers(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "visible_gpencil_layers", list);
 }
 
-int CTX_data_editable_gpencil_layers(const bContext *C, ListBase *list)
+bool CTX_data_editable_gpencil_layers(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "editable_gpencil_layers", list);
 }
 
-int CTX_data_editable_gpencil_strokes(const bContext *C, ListBase *list)
+bool CTX_data_editable_gpencil_strokes(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "editable_gpencil_strokes", list);
 }

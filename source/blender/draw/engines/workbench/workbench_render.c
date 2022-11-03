@@ -17,6 +17,7 @@
 
 #include "ED_view3d.h"
 
+#include "GPU_context.h"
 #include "GPU_shader.h"
 
 #include "DEG_depsgraph.h"
@@ -115,11 +116,11 @@ static void workbench_render_result_z(struct RenderLayer *rl,
     float winmat[4][4];
     DRW_view_winmat_get(NULL, winmat, false);
 
-    int pix_ct = BLI_rcti_size_x(rect) * BLI_rcti_size_y(rect);
+    int pix_num = BLI_rcti_size_x(rect) * BLI_rcti_size_y(rect);
 
     /* Convert ogl depth [0..1] to view Z [near..far] */
     if (DRW_view_is_persp_get(NULL)) {
-      for (int i = 0; i < pix_ct; i++) {
+      for (int i = 0; i < pix_num; i++) {
         if (rp->rect[i] == 1.0f) {
           rp->rect[i] = 1e10f; /* Background */
         }
@@ -135,7 +136,7 @@ static void workbench_render_result_z(struct RenderLayer *rl,
       float far = DRW_view_far_distance_get(NULL);
       float range = fabsf(far - near);
 
-      for (int i = 0; i < pix_ct; i++) {
+      for (int i = 0; i < pix_num; i++) {
         if (rp->rect[i] == 1.0f) {
           rp->rect[i] = 1e10f; /* Background */
         }
@@ -170,9 +171,9 @@ void workbench_render(void *ved, RenderEngine *engine, RenderLayer *render_layer
 
   DRW_render_instance_buffer_finish();
 
-  /* Also we weed to have a correct FBO bound for #DRW_hair_update */
+  /* Also we weed to have a correct FBO bound for #DRW_curves_update */
   GPU_framebuffer_bind(dfbl->default_fb);
-  DRW_hair_update();
+  DRW_curves_update();
 
   GPU_framebuffer_bind(dfbl->default_fb);
   GPU_framebuffer_clear_depth(dfbl->default_fb, 1.0f);
@@ -187,6 +188,10 @@ void workbench_render(void *ved, RenderEngine *engine, RenderLayer *render_layer
   }
 
   workbench_draw_finish(data);
+
+  /* Perform render step between samples to allow
+   * flushing of freed GPUBackend resources. */
+  GPU_render_step();
 
   /* Write render output. */
   const char *viewname = RE_GetActiveRenderView(engine->re);

@@ -31,6 +31,7 @@ struct Curve;
 struct FluidsimSettings;
 struct GeometrySet;
 struct Ipo;
+struct LightgroupMembership;
 struct Material;
 struct Mesh;
 struct Object;
@@ -93,7 +94,7 @@ typedef struct BoundBox {
 
 /** #BoundBox.flag */
 enum {
-  BOUNDBOX_DISABLED = (1 << 0),
+  /* BOUNDBOX_DISABLED = (1 << 0), */ /* UNUSED */
   BOUNDBOX_DIRTY = (1 << 1),
 };
 
@@ -203,7 +204,7 @@ typedef struct Object_Runtime {
 
   float (*crazyspace_deform_imats)[3][3];
   float (*crazyspace_deform_cos)[3];
-  int crazyspace_num_verts;
+  int crazyspace_verts_num;
 
   int _pad3[3];
 } Object_Runtime;
@@ -214,6 +215,10 @@ typedef struct ObjectLineArt {
 
   /** if OBJECT_LRT_OWN_CREASE is set */
   float crease_threshold;
+
+  unsigned char intersection_priority;
+
+  char _pad[7];
 } ObjectLineArt;
 
 /**
@@ -226,13 +231,17 @@ enum eObjectLineArt_Usage {
   OBJECT_LRT_EXCLUDE = (1 << 2),
   OBJECT_LRT_INTERSECTION_ONLY = (1 << 3),
   OBJECT_LRT_NO_INTERSECTION = (1 << 4),
+  OBJECT_LRT_FORCE_INTERSECTION = (1 << 5),
 };
 
 enum eObjectLineArt_Flags {
   OBJECT_LRT_OWN_CREASE = (1 << 0),
+  OBJECT_LRT_OWN_INTERSECTION_PRIORITY = (1 << 1),
 };
 
 typedef struct Object {
+  DNA_DEFINE_CXX_METHODS(Object)
+
   ID id;
   /** Animation data (must be immediately after id for utilities to use it). */
   struct AnimData *adt;
@@ -313,20 +322,14 @@ typedef struct Object {
   float rotAxis[3], drotAxis[3];
   /** Axis angle rotation - angle part. */
   float rotAngle, drotAngle;
-  /** Final world-space matrix with constraints & animsys applied. */
-  float obmat[4][4];
+  /** Final transformation matrices with constraints & animsys applied. */
+  float object_to_world[4][4];
+  float world_to_object[4][4];
   /** Inverse result of parent, so that object doesn't 'stick' to parent. */
   float parentinv[4][4];
   /** Inverse result of constraints.
    * doesn't include effect of parent or object local transform. */
   float constinv[4][4];
-  /**
-   * Inverse matrix of 'obmat' for any other use than rendering!
-   *
-   * \note this isn't assured to be valid as with 'obmat',
-   * before using this value you should do: `invert_m4_m4(ob->imat, ob->obmat)`
-   */
-  float imat[4][4];
 
   /** Copy of Base's layer in the scene. */
   unsigned int lay DNA_DEPRECATED;
@@ -371,7 +374,7 @@ typedef struct Object {
   /** Dupliface scale. */
   float instance_faces_scale;
 
-  /** Custom index, for renderpasses. */
+  /** Custom index, for render-passes. */
   short index;
   /** Current deformation group, NOTE: index starts at 1. */
   unsigned short actdef DNA_DEPRECATED;
@@ -426,14 +429,19 @@ typedef struct Object {
   char empty_image_visibility_flag;
   char empty_image_depth;
   char empty_image_flag;
-  char _pad8[5];
+
+  /** ObjectModifierFlag */
+  uint8_t modifier_flag;
+  char _pad8[4];
 
   struct PreviewImage *preview;
 
   ObjectLineArt lineart;
 
+  /** Lightgroup membership information. */
+  struct LightgroupMembership *lightgroup;
+
   /** Runtime evaluation data (keep last). */
-  void *_pad9;
   Object_Runtime runtime;
 } Object;
 
@@ -464,14 +472,21 @@ typedef struct ObHook {
 
 /* **************** OBJECT ********************* */
 
-/* used many places, should be specialized. */
+/**
+ * This is used as a flag for many kinds of data that use selections, examples include:
+ * - #BezTriple.f1, #BezTriple.f2, #BezTriple.f3
+ * - #bNote.flag
+ * - #MovieTrackingTrack.flag
+ * And more, ideally this would have a generic location.
+ */
 #define SELECT 1
 
 /** #Object.type */
 enum {
   OB_EMPTY = 0,
   OB_MESH = 1,
-  OB_CURVE = 2,
+  /** Curve object is still used but replaced by "Curves" for the future (see T95355). */
+  OB_CURVES_LEGACY = 2,
   OB_SURF = 3,
   OB_FONT = 4,
   OB_MBALL = 5,
@@ -515,17 +530,28 @@ enum {
         OB_VOLUME))
 #define OB_TYPE_SUPPORT_VGROUP(_type) (ELEM(_type, OB_MESH, OB_LATTICE, OB_GPENCIL))
 #define OB_TYPE_SUPPORT_EDITMODE(_type) \
-  (ELEM(_type, OB_MESH, OB_FONT, OB_CURVE, OB_SURF, OB_MBALL, OB_LATTICE, OB_ARMATURE))
-#define OB_TYPE_SUPPORT_PARVERT(_type) (ELEM(_type, OB_MESH, OB_SURF, OB_CURVE, OB_LATTICE))
+  (ELEM(_type, \
+        OB_MESH, \
+        OB_FONT, \
+        OB_CURVES_LEGACY, \
+        OB_SURF, \
+        OB_MBALL, \
+        OB_LATTICE, \
+        OB_ARMATURE, \
+        OB_CURVES))
+#define OB_TYPE_SUPPORT_PARVERT(_type) \
+  (ELEM(_type, OB_MESH, OB_SURF, OB_CURVES_LEGACY, OB_LATTICE))
 
 /** Matches #OB_TYPE_SUPPORT_EDITMODE. */
-#define OB_DATA_SUPPORT_EDITMODE(_type) (ELEM(_type, ID_ME, ID_CU, ID_MB, ID_LT, ID_AR))
+#define OB_DATA_SUPPORT_EDITMODE(_type) \
+  (ELEM(_type, ID_ME, ID_CU_LEGACY, ID_MB, ID_LT, ID_AR) || \
+   (U.experimental.use_new_curves_tools && (_type) == ID_CV))
 
 /* is this ID type used as object data */
 #define OB_DATA_SUPPORT_ID(_id_type) \
   (ELEM(_id_type, \
         ID_ME, \
-        ID_CU, \
+        ID_CU_LEGACY, \
         ID_MB, \
         ID_LA, \
         ID_SPK, \
@@ -540,7 +566,7 @@ enum {
 
 #define OB_DATA_SUPPORT_ID_CASE \
   ID_ME: \
-  case ID_CU: \
+  case ID_CU_LEGACY: \
   case ID_MB: \
   case ID_LA: \
   case ID_SPK: \
@@ -765,6 +791,10 @@ enum {
 enum {
   OB_EMPTY_IMAGE_USE_ALPHA_BLEND = 1 << 0,
 };
+
+typedef enum ObjectModifierFlag {
+  OB_MODIFIER_FLAG_ADD_REST_POSITION = 1 << 0,
+} ObjectModifierFlag;
 
 #define MAX_DUPLI_RECUR 8
 

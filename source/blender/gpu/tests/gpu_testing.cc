@@ -19,14 +19,13 @@ void GPUTest::SetUp()
   ghost_system = GHOST_CreateSystem();
   ghost_context = GHOST_CreateOpenGLContext(ghost_system, glSettings);
   GHOST_ActivateOpenGLContext(ghost_context);
-  context = GPU_context_create(nullptr);
+  context = GPU_context_create(nullptr, ghost_context);
   GPU_init();
 }
 
 void GPUTest::TearDown()
 {
   GPU_exit();
-  GPU_backend_exit();
   GPU_context_discard(context);
   GHOST_DisposeOpenGLContext(ghost_system, ghost_context);
   GHOST_DisposeSystem(ghost_system);

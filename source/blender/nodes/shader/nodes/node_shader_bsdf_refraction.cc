@@ -15,17 +15,18 @@ static void node_declare(NodeDeclarationBuilder &b)
       .subtype(PROP_FACTOR);
   b.add_input<decl::Float>(N_("IOR")).default_value(1.45f).min(0.0f).max(1000.0f);
   b.add_input<decl::Vector>(N_("Normal")).hide_value();
+  b.add_input<decl::Float>(N_("Weight")).unavailable();
   b.add_output<decl::Shader>(N_("BSDF"));
 }
 
-static void node_shader_init_refraction(bNodeTree *UNUSED(ntree), bNode *node)
+static void node_shader_init_refraction(bNodeTree * /*ntree*/, bNode *node)
 {
   node->custom1 = SHD_GLOSSY_BECKMANN;
 }
 
 static int node_shader_gpu_bsdf_refraction(GPUMaterial *mat,
                                            bNode *node,
-                                           bNodeExecData *UNUSED(execdata),
+                                           bNodeExecData * /*execdata*/,
                                            GPUNodeStack *in,
                                            GPUNodeStack *out)
 {

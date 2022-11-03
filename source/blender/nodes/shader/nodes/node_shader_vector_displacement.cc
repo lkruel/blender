@@ -13,34 +13,31 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Vector>(N_("Displacement"));
 }
 
-static void node_shader_init_vector_displacement(bNodeTree *UNUSED(ntree), bNode *node)
+static void node_shader_init_vector_displacement(bNodeTree * /*ntree*/, bNode *node)
 {
   node->custom1 = SHD_SPACE_TANGENT; /* space */
 }
 
 static int gpu_shader_vector_displacement(GPUMaterial *mat,
                                           bNode *node,
-                                          bNodeExecData *UNUSED(execdata),
+                                          bNodeExecData * /*execdata*/,
                                           GPUNodeStack *in,
                                           GPUNodeStack *out)
 {
-  if (node->custom1 == SHD_SPACE_TANGENT) {
-    return GPU_stack_link(mat,
-                          node,
-                          "node_vector_displacement_tangent",
-                          in,
-                          out,
-                          GPU_attribute(mat, CD_TANGENT, ""),
-                          GPU_builtin(GPU_WORLD_NORMAL),
-                          GPU_builtin(GPU_OBJECT_MATRIX),
-                          GPU_builtin(GPU_VIEW_MATRIX));
+  switch (node->custom1) {
+    case SHD_SPACE_TANGENT:
+      return GPU_stack_link(mat,
+                            node,
+                            "node_vector_displacement_tangent",
+                            in,
+                            out,
+                            GPU_attribute(mat, CD_TANGENT, ""));
+    case SHD_SPACE_OBJECT:
+      return GPU_stack_link(mat, node, "node_vector_displacement_object", in, out);
+    case SHD_SPACE_WORLD:
+    default:
+      return GPU_stack_link(mat, node, "node_vector_displacement_world", in, out);
   }
-  if (node->custom1 == SHD_SPACE_OBJECT) {
-    return GPU_stack_link(
-        mat, node, "node_vector_displacement_object", in, out, GPU_builtin(GPU_OBJECT_MATRIX));
-  }
-
-  return GPU_stack_link(mat, node, "node_vector_displacement_world", in, out);
 }
 
 }  // namespace blender::nodes::node_shader_vector_displacement_cc

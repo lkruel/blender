@@ -43,6 +43,10 @@ Session::Session(const SessionParams &params_, const SceneParams &scene_params)
 
   device = Device::create(params.device, stats, profiler);
 
+  if (device->have_error()) {
+    progress.set_error(device->error_message());
+  }
+
   scene = new Scene(scene_params, device);
 
   /* Configure path tracer. */
@@ -97,7 +101,10 @@ void Session::start()
   {
     /* Signal session thread to start rendering. */
     thread_scoped_lock session_thread_lock(session_thread_mutex_);
-    assert(session_thread_state_ == SESSION_THREAD_WAIT);
+    if (session_thread_state_ == SESSION_THREAD_RENDER) {
+      /* Already rendering, nothing to do. */
+      return;
+    }
     session_thread_state_ = SESSION_THREAD_RENDER;
   }
 
@@ -107,11 +114,7 @@ void Session::start()
 void Session::cancel(bool quick)
 {
   /* Check if session thread is rendering. */
-  bool rendering;
-  {
-    thread_scoped_lock session_thread_lock(session_thread_mutex_);
-    rendering = (session_thread_state_ == SESSION_THREAD_RENDER);
-  }
+  const bool rendering = is_session_thread_rendering();
 
   if (rendering) {
     /* Cancel path trace operations. */
@@ -147,11 +150,11 @@ void Session::run_main_render_loop()
     RenderWork render_work = run_update_for_next_iteration();
 
     if (!render_work) {
-      if (VLOG_IS_ON(2)) {
+      if (VLOG_INFO_IS_ON) {
         double total_time, render_time;
         progress.get_time(total_time, render_time);
-        VLOG(2) << "Rendering in main loop is done in " << render_time << " seconds.";
-        VLOG(2) << path_trace_->full_report();
+        VLOG_INFO << "Rendering in main loop is done in " << render_time << " seconds.";
+        VLOG_INFO << path_trace_->full_report();
       }
 
       if (params.background) {
@@ -272,6 +275,12 @@ void Session::thread_render()
     progress.set_update();
 }
 
+bool Session::is_session_thread_rendering()
+{
+  thread_scoped_lock session_thread_lock(session_thread_mutex_);
+  return (session_thread_state_ == SESSION_THREAD_RENDER);
+}
+
 RenderWork Session::run_update_for_next_iteration()
 {
   RenderWork render_work;
@@ -311,6 +320,13 @@ RenderWork Session::run_update_for_next_iteration()
   {
     const AdaptiveSampling adaptive_sampling = scene->integrator->get_adaptive_sampling();
     path_trace_->set_adaptive_sampling(adaptive_sampling);
+  }
+
+  /* Update path guiding. */
+  {
+    const GuidingParams guiding_params = scene->integrator->get_guiding_params(device);
+    const bool guiding_reset = (guiding_params.use) ? scene->need_reset(false) : false;
+    path_trace_->set_guiding_params(guiding_params, guiding_reset);
   }
 
   render_scheduler_.set_num_samples(params.samples);
@@ -365,6 +381,14 @@ RenderWork Session::run_update_for_next_iteration()
     if (update_scene(width, height)) {
       profiler.reset(scene->shaders.size(), scene->objects.size());
     }
+
+    /* Unlock scene mutex before loading denoiser kernels, since that may attempt to activate
+     * graphics interop, which can deadlock when the scene mutex is still being held. */
+    scene_lock.unlock();
+
+    path_trace_->load_kernels();
+    path_trace_->alloc_work_memory();
+
     progress.add_skip_time(update_timer, params.background);
   }
 
@@ -423,8 +447,7 @@ int2 Session::get_effective_tile_size() const
   const int image_width = buffer_params_.width;
   const int image_height = buffer_params_.height;
 
-  /* No support yet for baking with tiles. */
-  if (!params.use_auto_tile || scene->bake_manager->get_baking()) {
+  if (!params.use_auto_tile) {
     return make_int2(image_width, image_height);
   }
 
@@ -490,7 +513,9 @@ void Session::do_delayed_reset()
   if (!params.background) {
     progress.set_start_time();
   }
+  const double time_limit = params.time_limit * ((double)tile_manager_.get_num_tiles());
   progress.set_render_start_time();
+  progress.set_time_limit(time_limit);
 }
 
 void Session::reset(const SessionParams &session_params, const BufferParams &buffer_params)
@@ -554,7 +579,7 @@ void Session::set_pause(bool pause)
     }
   }
 
-  if (session_thread_) {
+  if (is_session_thread_rendering()) {
     if (notify) {
       pause_cond_.notify_all();
     }
@@ -585,7 +610,8 @@ double Session::get_estimated_remaining_time() const
   progress.get_time(total_time, render_time);
   double remaining = (1.0 - (double)completed) * (render_time / (double)completed);
 
-  const double time_limit = render_scheduler_.get_time_limit();
+  const double time_limit = render_scheduler_.get_time_limit() *
+                            ((double)tile_manager_.get_num_tiles());
   if (time_limit != 0.0) {
     remaining = min(remaining, max(time_limit - render_time, 0.0));
   }
@@ -613,12 +639,7 @@ bool Session::update_scene(int width, int height)
   Camera *cam = scene->camera;
   cam->set_screen_size(width, height);
 
-  const bool scene_update_result = scene->update(progress);
-
-  path_trace_->load_kernels();
-  path_trace_->alloc_work_memory();
-
-  return scene_update_result;
+  return scene->update(progress);
 }
 
 static string status_append(const string &status, const string &suffix)

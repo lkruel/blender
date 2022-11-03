@@ -176,7 +176,8 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 {
   Scene *sce = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Object *obact = OBACT(view_layer);
+  BKE_view_layer_synced_ensure(sce, view_layer);
+  Object *obact = BKE_view_layer_active_object_get(view_layer);
   const eObjectMode object_mode = obact ? obact->mode : OB_MODE_OBJECT;
   ToolSettings *ts = CTX_data_tool_settings(C);
   ARegion *region = CTX_wm_region(C);
@@ -206,6 +207,12 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     t->obedit_type = -1;
   }
 
+  if (t->options & CTX_CURSOR) {
+    /* Cursor should always use the drag start as the combination of click-drag to place & move
+     * doesn't work well if the click location isn't used when transforming. */
+    t->flag |= T_EVENT_DRAG_START;
+  }
+
   /* Many kinds of transform only use a single handle. */
   if (t->data_container == NULL) {
     t->data_container = MEM_callocN(sizeof(*t->data_container), __func__);
@@ -216,7 +223,12 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 
   int mval[2];
   if (event) {
-    copy_v2_v2_int(mval, event->mval);
+    if (t->flag & T_EVENT_DRAG_START) {
+      WM_event_drag_start_mval(event, region, mval);
+    }
+    else {
+      copy_v2_v2_int(mval, event->mval);
+    }
   }
   else {
     zero_v2_int(mval);
@@ -305,7 +317,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     }
 
     /* initialize UV transform from */
-    if (op && ((prop = RNA_struct_find_property(op->ptr, "correct_uv")))) {
+    if (op && (prop = RNA_struct_find_property(op->ptr, "correct_uv"))) {
       if (RNA_property_is_set(op->ptr, prop)) {
         if (RNA_property_boolean_get(op->ptr, prop)) {
           t->settings->uvcalc_flag |= UVCALC_TRANSFORM_CORRECT_SLIDE;
@@ -322,7 +334,8 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   }
   else if (t->spacetype == SPACE_IMAGE) {
     SpaceImage *sima = area->spacedata.first;
-    if (ED_space_image_show_uvedit(sima, OBACT(t->view_layer))) {
+    BKE_view_layer_synced_ensure(t->scene, t->view_layer);
+    if (ED_space_image_show_uvedit(sima, BKE_view_layer_active_object_get(t->view_layer))) {
       /* UV transform */
     }
     else if (sima->mode == SI_MODE_MASK) {
@@ -347,6 +360,10 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   }
   else if (t->spacetype == SPACE_SEQ && region->regiontype == RGN_TYPE_PREVIEW) {
     t->options |= CTX_SEQUENCER_IMAGE;
+
+    /* Needed for autokeying transforms in preview during playback. */
+    bScreen *animscreen = ED_screen_animation_playing(CTX_wm_manager(C));
+    t->animtimer = (animscreen) ? animscreen->animtimer : NULL;
   }
 
   setTransformViewAspect(t, t->aspect);
@@ -540,7 +557,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   }
   else {
     /* Release confirms preference should not affect node editor (T69288, T70504). */
-    if (ISMOUSE(t->launch_event) &&
+    if (ISMOUSE_BUTTON(t->launch_event) &&
         ((U.flag & USER_RELEASECONFIRM) || (t->spacetype == SPACE_NODE))) {
       /* Global "release confirm" on mouse bindings */
       t->flag |= T_RELEASE_CONFIRM;
@@ -707,9 +724,6 @@ void postTrans(bContext *C, TransInfo *t)
   if (t->draw_handle_view) {
     ED_region_draw_cb_exit(t->region->type, t->draw_handle_view);
   }
-  if (t->draw_handle_apply) {
-    ED_region_draw_cb_exit(t->region->type, t->draw_handle_apply);
-  }
   if (t->draw_handle_pixel) {
     ED_region_draw_cb_exit(t->region->type, t->draw_handle_pixel);
   }
@@ -731,7 +745,8 @@ void postTrans(bContext *C, TransInfo *t)
   if (t->data_len_all != 0) {
     FOREACH_TRANS_DATA_CONTAINER (t, tc) {
       /* free data malloced per trans-data */
-      if (ELEM(t->obedit_type, OB_CURVE, OB_SURF, OB_GPENCIL) || (t->spacetype == SPACE_GRAPH)) {
+      if (ELEM(t->obedit_type, OB_CURVES_LEGACY, OB_SURF, OB_GPENCIL) ||
+          (t->spacetype == SPACE_GRAPH)) {
         TransData *td = tc->data;
         for (int a = 0; a < tc->data_len; a++, td++) {
           if (td->flag & TD_BEZTRIPLE) {
@@ -1048,15 +1063,15 @@ bool calculateCenterActive(TransInfo *t, bool select_only, float r_center[3])
   }
   if (tc->obedit) {
     if (ED_object_calc_active_center_for_editmode(tc->obedit, select_only, r_center)) {
-      mul_m4_v3(tc->obedit->obmat, r_center);
+      mul_m4_v3(tc->obedit->object_to_world, r_center);
       return true;
     }
   }
   else if (t->options & CTX_POSE_BONE) {
-    ViewLayer *view_layer = t->view_layer;
-    Object *ob = OBACT(view_layer);
+    BKE_view_layer_synced_ensure(t->scene, t->view_layer);
+    Object *ob = BKE_view_layer_active_object_get(t->view_layer);
     if (ED_object_calc_active_center_for_posemode(ob, select_only, r_center)) {
-      mul_m4_v3(ob->obmat, r_center);
+      mul_m4_v3(ob->object_to_world, r_center);
       return true;
     }
   }
@@ -1070,11 +1085,10 @@ bool calculateCenterActive(TransInfo *t, bool select_only, float r_center[3])
   }
   else {
     /* object mode */
-    ViewLayer *view_layer = t->view_layer;
-    Object *ob = OBACT(view_layer);
-    Base *base = BASACT(view_layer);
-    if (ob && ((!select_only) || ((base->flag & BASE_SELECTED) != 0))) {
-      copy_v3_v3(r_center, ob->obmat[3]);
+    BKE_view_layer_synced_ensure(t->scene, t->view_layer);
+    Base *base = BKE_view_layer_active_base_get(t->view_layer);
+    if (base && ((!select_only) || ((base->flag & BASE_SELECTED) != 0))) {
+      copy_v3_v3(r_center, base->object->object_to_world[3]);
       return true;
     }
   }
@@ -1119,6 +1133,33 @@ static void calculateCenter_FromAround(TransInfo *t, int around, float r_center[
   }
 }
 
+static void calculateZfac(TransInfo *t)
+{
+  /* ED_view3d_calc_zfac() defines a factor for perspective depth correction,
+   * used in ED_view3d_win_to_delta() */
+
+  /* zfac is only used convertViewVec only in cases operator was invoked in RGN_TYPE_WINDOW
+   * and never used in other cases.
+   *
+   * We need special case here as well, since ED_view3d_calc_zfac will crash when called
+   * for a region different from RGN_TYPE_WINDOW.
+   */
+  if ((t->spacetype == SPACE_VIEW3D) && (t->region->regiontype == RGN_TYPE_WINDOW)) {
+    t->zfac = ED_view3d_calc_zfac(t->region->regiondata, t->center_global);
+  }
+  else if (t->spacetype == SPACE_IMAGE) {
+    SpaceImage *sima = t->area->spacedata.first;
+    t->zfac = 1.0f / sima->zoom;
+  }
+  else if (t->region) {
+    View2D *v2d = &t->region->v2d;
+    /* Get zoom fac the same way as in
+     * `ui_view2d_curRect_validate_resize` - better keep in sync! */
+    const float zoomx = (float)(BLI_rcti_size_x(&v2d->mask) + 1) / BLI_rctf_size_x(&v2d->cur);
+    t->zfac = 1.0f / zoomx;
+  }
+}
+
 void calculateCenter(TransInfo *t)
 {
   if ((t->flag & T_OVERRIDE_CENTER) == 0) {
@@ -1145,7 +1186,7 @@ void calculateCenter(TransInfo *t)
 
         projectFloatView(t, axis, t->center2d);
 
-        /* rotate only needs correct 2d center, grab needs ED_view3d_calc_zfac() value */
+        /* Rotate only needs correct 2d center, grab needs #ED_view3d_calc_zfac() value. */
         if (t->mode == TFM_TRANSLATION) {
           copy_v3_v3(t->center_global, axis);
         }
@@ -1153,23 +1194,46 @@ void calculateCenter(TransInfo *t)
     }
   }
 
-  if (t->spacetype == SPACE_VIEW3D) {
-    /* ED_view3d_calc_zfac() defines a factor for perspective depth correction,
-     * used in ED_view3d_win_to_delta() */
+  calculateZfac(t);
+}
 
-    /* zfac is only used convertViewVec only in cases operator was invoked in RGN_TYPE_WINDOW
-     * and never used in other cases.
-     *
-     * We need special case here as well, since ED_view3d_calc_zfac will crash when called
-     * for a region different from RGN_TYPE_WINDOW.
-     */
-    if (t->region->regiontype == RGN_TYPE_WINDOW) {
-      t->zfac = ED_view3d_calc_zfac(t->region->regiondata, t->center_global, NULL);
+/* Called every time the view changes due to navigation.
+ * Adjusts the mouse position relative to the object. */
+void tranformViewUpdate(TransInfo *t)
+{
+  float zoom_prev = t->zfac;
+  float zoom_new;
+  if ((t->spacetype == SPACE_VIEW3D) && (t->region->regiontype == RGN_TYPE_WINDOW)) {
+    if (!t->persp) {
+      zoom_prev *= len_v3(t->persinv[0]);
     }
-    else {
-      t->zfac = 0.0f;
+
+    setTransformViewMatrices(t);
+    calculateZfac(t);
+
+    zoom_new = t->zfac;
+    if (!t->persp) {
+      zoom_new *= len_v3(t->persinv[0]);
+    }
+
+    for (int i = 0; i < ARRAY_SIZE(t->orient); i++) {
+      if (t->orient[i].type == V3D_ORIENT_VIEW) {
+        copy_m3_m4(t->orient[i].matrix, t->viewinv);
+        normalize_m3(t->orient[i].matrix);
+        if (t->orient_curr == i) {
+          copy_m3_m3(t->spacemtx, t->orient[i].matrix);
+          invert_m3_m3_safe_ortho(t->spacemtx_inv, t->spacemtx);
+        }
+      }
     }
   }
+  else {
+    calculateZfac(t);
+    zoom_new = t->zfac;
+  }
+
+  calculateCenter2D(t);
+  transform_input_update(t, zoom_prev / zoom_new);
 }
 
 void calculatePropRatio(TransInfo *t)
@@ -1401,6 +1465,7 @@ Object *transform_object_deform_pose_armature_get(const TransInfo *t, Object *ob
    * Lines below just check is also visible. */
   Object *ob_armature = BKE_modifiers_is_deformed_by_armature(ob);
   if (ob_armature && ob_armature->mode & OB_MODE_POSE) {
+    BKE_view_layer_synced_ensure(t->scene, t->view_layer);
     Base *base_arm = BKE_view_layer_base_find(t->view_layer, ob_armature);
     if (base_arm) {
       View3D *v3d = t->view;

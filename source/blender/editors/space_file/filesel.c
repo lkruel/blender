@@ -197,7 +197,7 @@ static FileSelectParams *fileselect_ensure_updated_file_params(SpaceFile *sfile)
     }
 
     if (params->dir[0]) {
-      BLI_path_normalize_dir(blendfile_path, params->dir);
+      BLI_path_normalize_dir(blendfile_path, params->dir, sizeof(params->dir));
       BLI_path_abs(params->dir, blendfile_path);
     }
 
@@ -515,18 +515,14 @@ void ED_fileselect_activate_by_id(SpaceFile *sfile, ID *asset_id, const bool def
   FileSelectParams *params = ED_fileselect_get_active_params(sfile);
   struct FileList *files = sfile->files;
 
-  const int num_files_filtered = filelist_files_ensure(files);
-  for (int file_index = 0; file_index < num_files_filtered; ++file_index) {
-    const FileDirEntry *file = filelist_file_ex(files, file_index, false);
-
-    if (filelist_file_get_id(file) != asset_id) {
-      continue;
-    }
-
-    params->active_file = file_index;
-    filelist_entry_select_set(files, file, FILE_SEL_ADD, FILE_SEL_SELECTED, CHECK_ALL);
-    break;
+  const int file_index = filelist_file_find_id(files, asset_id);
+  const FileDirEntry *file = filelist_file_ex(files, file_index, true);
+  if (file == NULL) {
+    return;
   }
+
+  params->active_file = file_index;
+  filelist_entry_select_set(files, file, FILE_SEL_ADD, FILE_SEL_SELECTED, CHECK_ALL);
 
   WM_main_add_notifier(NC_ASSET | NA_ACTIVATED, NULL);
   WM_main_add_notifier(NC_ASSET | NA_SELECTED, NULL);
@@ -669,12 +665,17 @@ void ED_fileselect_params_to_userdef(SpaceFile *sfile,
   }
 }
 
-void fileselect_file_set(SpaceFile *sfile, const int index)
+void fileselect_file_set(struct bContext *C, SpaceFile *sfile, const int index)
 {
   const struct FileDirEntry *file = filelist_file(sfile->files, index);
   if (file && file->relpath && file->relpath[0] && !(file->typeflag & FILE_TYPE_DIR)) {
     FileSelectParams *params = ED_fileselect_get_active_params(sfile);
     BLI_strncpy(params->file, file->relpath, FILE_MAXFILE);
+    if (sfile->op) {
+      /* Update the filepath properties of the operator. */
+      Main *bmain = CTX_data_main(C);
+      file_sfile_to_operator(C, bmain, sfile->op, sfile);
+    }
   }
 }
 
@@ -694,14 +695,14 @@ int ED_fileselect_layout_numfiles(FileLayout *layout, ARegion *region)
    */
   if (layout->flag & FILE_LAYOUT_HOR) {
     const int x_item = layout->tile_w + (2 * layout->tile_border_x);
-    const int x_view = (int)(BLI_rctf_size_x(&region->v2d.cur));
+    const int x_view = (int)BLI_rctf_size_x(&region->v2d.cur);
     const int x_over = x_item - (x_view % x_item);
     numfiles = (int)((float)(x_view + x_over) / (float)(x_item));
     return numfiles * layout->rows;
   }
 
   const int y_item = layout->tile_h + (2 * layout->tile_border_y);
-  const int y_view = (int)(BLI_rctf_size_y(&region->v2d.cur)) - layout->offset_top;
+  const int y_view = (int)BLI_rctf_size_y(&region->v2d.cur) - layout->offset_top;
   const int y_over = y_item - (y_view % y_item);
   numfiles = (int)((float)(y_view + y_over) / (float)(y_item));
   return numfiles * layout->flow_columns;
@@ -812,7 +813,7 @@ bool ED_fileselect_layout_isect_rect(const FileLayout *layout,
   return BLI_rcti_isect(&maskrect, rect, r_dst);
 }
 
-void ED_fileselect_layout_tilepos(FileLayout *layout, int tile, int *x, int *y)
+void ED_fileselect_layout_tilepos(const FileLayout *layout, int tile, int *x, int *y)
 {
   if (layout->flag == FILE_LAYOUT_HOR) {
     *x = layout->tile_border_x +
@@ -987,6 +988,7 @@ void ED_fileselect_init_layout(struct SpaceFile *sfile, ARegion *region)
 
   if (params->display == FILE_IMGDISPLAY) {
     const float pad_fac = compact ? 0.15f : 0.3f;
+    /* Matches UI_preview_tile_size_x()/_y() by default. */
     layout->prv_w = ((float)params->thumbnail_size / 20.0f) * UI_UNIT_X;
     layout->prv_h = ((float)params->thumbnail_size / 20.0f) * UI_UNIT_Y;
     layout->tile_border_x = pad_fac * UI_UNIT_X;
@@ -1013,6 +1015,7 @@ void ED_fileselect_init_layout(struct SpaceFile *sfile, ARegion *region)
   else if (params->display == FILE_VERTICALDISPLAY) {
     int rowcount;
 
+    /* Matches UI_preview_tile_size_x()/_y() by default. */
     layout->prv_w = ((float)params->thumbnail_size / 20.0f) * UI_UNIT_X;
     layout->prv_h = ((float)params->thumbnail_size / 20.0f) * UI_UNIT_Y;
     layout->tile_border_x = 0.4f * UI_UNIT_X;
@@ -1034,6 +1037,7 @@ void ED_fileselect_init_layout(struct SpaceFile *sfile, ARegion *region)
     layout->flag = FILE_LAYOUT_VER;
   }
   else if (params->display == FILE_HORIZONTALDISPLAY) {
+    /* Matches UI_preview_tile_size_x()/_y() by default. */
     layout->prv_w = ((float)params->thumbnail_size / 20.0f) * UI_UNIT_X;
     layout->prv_h = ((float)params->thumbnail_size / 20.0f) * UI_UNIT_Y;
     layout->tile_border_x = 0.4f * UI_UNIT_X;
@@ -1042,7 +1046,7 @@ void ED_fileselect_init_layout(struct SpaceFile *sfile, ARegion *region)
     layout->attribute_column_header_h = 0;
     layout->offset_top = layout->attribute_column_header_h;
     layout->height = (int)(BLI_rctf_size_y(&v2d->cur) - 2 * layout->tile_border_y);
-    /* Padding by full scrollbar H is too much, can overlap tile border Y. */
+    /* Padding by full scroll-bar H is too much, can overlap tile border Y. */
     layout->rows = (layout->height - V2D_SCROLL_HEIGHT + layout->tile_border_y) /
                    (layout->tile_h + 2 * layout->tile_border_y);
     layout->tile_w = VERTLIST_MAJORCOLUMN_WIDTH;
@@ -1129,8 +1133,8 @@ int file_select_match(struct SpaceFile *sfile, const char *pattern, char *matche
    */
   for (int i = 0; i < n; i++) {
     FileDirEntry *file = filelist_file(sfile->files, i);
-    /* Do not check whether file is a file or dir here! Causes T44243
-     * (we do accept dirs at this stage). */
+    /* Do not check whether file is a file or dir here! Causes: T44243
+     * (we do accept directories at this stage). */
     if (fnmatch(pattern, file->relpath, 0) == 0) {
       filelist_entry_select_set(sfile->files, file, FILE_SEL_ADD, FILE_SEL_SELECTED, CHECK_ALL);
       if (!match) {
@@ -1170,7 +1174,7 @@ int autocomplete_directory(struct bContext *C, char *str, void *UNUSED(arg_v))
           char path[FILE_MAX];
           BLI_stat_t status;
 
-          BLI_join_dirfile(path, sizeof(path), dirname, de->d_name);
+          BLI_path_join(path, sizeof(path), dirname, de->d_name);
 
           if (BLI_stat(path, &status) == 0) {
             if (S_ISDIR(status.st_mode)) { /* is subdir */
@@ -1183,7 +1187,7 @@ int autocomplete_directory(struct bContext *C, char *str, void *UNUSED(arg_v))
 
       match = UI_autocomplete_end(autocpl, str);
       if (match == AUTOCOMPLETE_FULL_MATCH) {
-        BLI_path_slash_ensure(str);
+        BLI_path_slash_ensure(str, FILE_MAX);
       }
     }
   }
@@ -1367,4 +1371,43 @@ ScrArea *ED_fileselect_handler_area_find(const wmWindow *win, const wmOperator *
   }
 
   return NULL;
+}
+
+ScrArea *ED_fileselect_handler_area_find_any_with_op(const wmWindow *win)
+{
+  const bScreen *screen = WM_window_get_active_screen(win);
+
+  ED_screen_areas_iter (win, screen, area) {
+    if (area->spacetype != SPACE_FILE) {
+      continue;
+    }
+
+    const SpaceFile *sfile = area->spacedata.first;
+    if (sfile->op) {
+      return area;
+    }
+  }
+
+  return NULL;
+}
+
+void ED_fileselect_ensure_default_filepath(struct bContext *C,
+                                           struct wmOperator *op,
+                                           const char *extension)
+{
+  if (!RNA_struct_property_is_set_ex(op->ptr, "filepath", false)) {
+    struct Main *bmain = CTX_data_main(C);
+    char filepath[FILE_MAX];
+    const char *blendfile_path = BKE_main_blendfile_path(bmain);
+
+    if (blendfile_path[0] == '\0') {
+      BLI_strncpy(filepath, DATA_("untitled"), sizeof(filepath));
+    }
+    else {
+      BLI_strncpy(filepath, blendfile_path, sizeof(filepath));
+    }
+
+    BLI_path_extension_replace(filepath, sizeof(filepath), extension);
+    RNA_string_set(op->ptr, "filepath", filepath);
+  }
 }

@@ -21,6 +21,7 @@
 #include "BKE_main.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "bpy_rna.h"
 #include "bpy_rna_data.h"
@@ -85,7 +86,7 @@ static PyTypeObject bpy_rna_data_context_Type = {
     NULL, /* ternaryfunc tp_call; */
     NULL, /* reprfunc tp_str; */
 
-    /* will only use these if this is a subtype of a py class */
+    /* Will only use these if this is a sub-type of a Python class. */
     NULL, /* getattrofunc tp_getattro; */
     NULL, /* setattrofunc tp_setattro; */
 
@@ -156,7 +157,13 @@ static PyObject *bpy_rna_data_temp_data(PyObject *UNUSED(self), PyObject *args, 
   BPy_DataContext *ret;
   const char *filepath = NULL;
   static const char *_keywords[] = {"filepath", NULL};
-  static _PyArg_Parser _parser = {"|$z:temp_data", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "|$" /* Optional keyword only arguments. */
+      "z"  /* `filepath` */
+      ":temp_data",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args, kw, &_parser, &filepath)) {
     return NULL;
   }
@@ -176,6 +183,7 @@ static PyObject *bpy_rna_data_context_enter(BPy_DataContext *self)
 
   self->data_rna = (BPy_StructRNA *)pyrna_struct_CreatePyObject(&ptr);
 
+  BLI_assert(!PyObject_GC_IsTracked((PyObject *)self));
   PyObject_GC_Track(self);
 
   return (PyObject *)self->data_rna;

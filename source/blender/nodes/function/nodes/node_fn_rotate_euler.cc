@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_listbase.h"
+#include "BLI_math_vector.h"
 #include "BLI_string.h"
 
 #include "RNA_enum_types.h"
@@ -14,11 +15,20 @@ namespace blender::nodes::node_fn_rotate_euler_cc {
 
 static void fn_node_rotate_euler_declare(NodeDeclarationBuilder &b)
 {
+  auto enable_axis_angle = [](bNode &node) {
+    node.custom1 = FN_NODE_ROTATE_EULER_TYPE_AXIS_ANGLE;
+  };
+
   b.is_function_node();
   b.add_input<decl::Vector>(N_("Rotation")).subtype(PROP_EULER).hide_value();
-  b.add_input<decl::Vector>(N_("Rotate By")).subtype(PROP_EULER);
-  b.add_input<decl::Vector>(N_("Axis")).default_value({0.0, 0.0, 1.0}).subtype(PROP_XYZ);
-  b.add_input<decl::Float>(N_("Angle")).subtype(PROP_ANGLE);
+  b.add_input<decl::Vector>(N_("Rotate By")).subtype(PROP_EULER).make_available([](bNode &node) {
+    node.custom1 = FN_NODE_ROTATE_EULER_TYPE_EULER;
+  });
+  b.add_input<decl::Vector>(N_("Axis"))
+      .default_value({0.0, 0.0, 1.0})
+      .subtype(PROP_XYZ)
+      .make_available(enable_axis_angle);
+  b.add_input<decl::Float>(N_("Angle")).subtype(PROP_ANGLE).make_available(enable_axis_angle);
   b.add_output<decl::Vector>(N_("Rotation"));
 }
 
@@ -36,13 +46,13 @@ static void fn_node_rotate_euler_update(bNodeTree *ntree, bNode *node)
       ntree, angle_socket, ELEM(node->custom1, FN_NODE_ROTATE_EULER_TYPE_AXIS_ANGLE));
 }
 
-static void fn_node_rotate_euler_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void fn_node_rotate_euler_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "type", UI_ITEM_R_EXPAND, nullptr, ICON_NONE);
   uiItemR(layout, ptr, "space", UI_ITEM_R_EXPAND, nullptr, ICON_NONE);
 }
 
-static const fn::MultiFunction *get_multi_function(bNode &bnode)
+static const fn::MultiFunction *get_multi_function(const bNode &bnode)
 {
   static fn::CustomMF_SI_SI_SO<float3, float3, float3> obj_euler_rot{
       "Rotate Euler by Euler/Object", [](const float3 &input, const float3 &rotation) {

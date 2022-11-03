@@ -23,21 +23,23 @@ set(INC
   ../sequencer
   ../../../intern/clog
   ../../../intern/ghost
-  ../../../intern/glew-mx
   ../../../intern/guardedalloc
   ../../../intern/memutil
+  ../bmesh
 
   # for writefile.c: dna_type_offsets.h
   ${CMAKE_BINARY_DIR}/source/blender/makesdna/intern
+  # RNA_prototypes.h
+  ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
 set(SRC
   intern/wm.c
   intern/wm_cursors.c
-  intern/wm_dragdrop.c
+  intern/wm_dragdrop.cc
   intern/wm_draw.c
   intern/wm_event_query.c
-  intern/wm_event_system.c
+  intern/wm_event_system.cc
   intern/wm_files.c
   intern/wm_files_link.c
   intern/wm_gesture.c
@@ -162,11 +164,11 @@ if(WIN32 OR APPLE)
   endif()
 endif()
 
-if(WITH_COMPOSITOR)
+if(WITH_COMPOSITOR_CPU)
   list(APPEND LIB
     bf_compositor
   )
-  add_definitions(-DWITH_COMPOSITOR)
+  add_definitions(-DWITH_COMPOSITOR_CPU)
 endif()
 
 if(WITH_XR_OPENXR)
@@ -193,3 +195,5 @@ blender_add_lib_nolist(bf_windowmanager "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
 # Needed so we can use dna_type_offsets.h for defaults initialization.
 add_dependencies(bf_windowmanager bf_dna)
+# RNA_prototypes.h
+add_dependencies(bf_windowmanager bf_rna)

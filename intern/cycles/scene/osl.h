@@ -66,6 +66,9 @@ class OSLShaderManager : public ShaderManager {
     return true;
   }
 
+  uint64_t get_attribute_id(ustring name) override;
+  uint64_t get_attribute_id(AttributeStandard std) override;
+
   void device_update_specific(Device *device,
                               DeviceScene *dscene,
                               Scene *scene,
@@ -147,7 +150,7 @@ class OSLCompiler {
   void parameter_attribute(const char *name, ustring s);
 
   void parameter_texture(const char *name, ustring filename, ustring colorspace);
-  void parameter_texture(const char *name, int svm_slot);
+  void parameter_texture(const char *name, const ImageHandle &handle);
   void parameter_texture_ies(const char *name, int svm_slot);
 
   ShaderType output_type()

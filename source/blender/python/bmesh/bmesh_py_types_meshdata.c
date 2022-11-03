@@ -56,6 +56,7 @@ static int bpy_bmloopuv_uv_set(BPy_BMLoopUV *self, PyObject *value, void *UNUSED
 
 PyDoc_STRVAR(bpy_bmloopuv_flag__pin_uv_doc, "UV pin state.\n\n:type: boolean");
 PyDoc_STRVAR(bpy_bmloopuv_flag__select_doc, "UV select state.\n\n:type: boolean");
+PyDoc_STRVAR(bpy_bmloopuv_flag__select_edge_doc, "UV edge select state.\n\n:type: boolean");
 
 static PyObject *bpy_bmloopuv_flag_get(BPy_BMLoopUV *self, void *flag_p)
 {
@@ -93,6 +94,11 @@ static PyGetSetDef bpy_bmloopuv_getseters[] = {
      (setter)bpy_bmloopuv_flag_set,
      bpy_bmloopuv_flag__select_doc,
      (void *)MLOOPUV_VERTSEL},
+    {"select_edge",
+     (getter)bpy_bmloopuv_flag_get,
+     (setter)bpy_bmloopuv_flag_set,
+     bpy_bmloopuv_flag__select_edge_doc,
+     (void *)MLOOPUV_EDGESEL},
 
     {NULL, NULL, NULL, NULL, NULL} /* Sentinel */
 };
@@ -292,7 +298,7 @@ static int mathutils_bmloopcol_set(BaseMathObject *bmo, int UNUSED(subtype))
 
 static int mathutils_bmloopcol_get_index(BaseMathObject *bmo, int subtype, int UNUSED(index))
 {
-  /* lazy, avoid repeteing the case statement */
+  /* Lazy, avoid repeating the case statement. */
   if (mathutils_bmloopcol_get(bmo, subtype) == -1) {
     return -1;
   }
@@ -303,7 +309,7 @@ static int mathutils_bmloopcol_set_index(BaseMathObject *bmo, int subtype, int i
 {
   const float f = bmo->data[index];
 
-  /* lazy, avoid repeteing the case statement */
+  /* Lazy, avoid repeating the case statement. */
   if (mathutils_bmloopcol_get(bmo, subtype) == -1) {
     return -1;
   }

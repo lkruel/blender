@@ -41,6 +41,7 @@
 #include "UI_resources.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "DEG_depsgraph.h"
 
@@ -126,7 +127,7 @@ static std::optional<Mesh *> calculate_weld(const Mesh &mesh, const WeldModifier
   return nullptr;
 }
 
-static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *UNUSED(ctx), Mesh *mesh)
+static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext * /*ctx*/, Mesh *mesh)
 {
   const WeldModifierData &wmd = reinterpret_cast<WeldModifierData &>(*md);
 
@@ -146,9 +147,7 @@ static void initData(ModifierData *md)
   MEMCPY_STRUCT_AFTER(wmd, DNA_struct_default_get(WeldModifierData), modifier);
 }
 
-static void requiredDataMask(Object *UNUSED(ob),
-                             ModifierData *md,
-                             CustomData_MeshMasks *r_cddata_masks)
+static void requiredDataMask(ModifierData *md, CustomData_MeshMasks *r_cddata_masks)
 {
   WeldModifierData *wmd = (WeldModifierData *)md;
 
@@ -158,7 +157,7 @@ static void requiredDataMask(Object *UNUSED(ob),
   }
 }
 
-static void panel_draw(const bContext *UNUSED(C), Panel *panel)
+static void panel_draw(const bContext * /*C*/, Panel *panel)
 {
   uiLayout *layout = panel->layout;
 
@@ -184,7 +183,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 ModifierTypeInfo modifierType_Weld = {
-    /* name */ "Weld",
+    /* name */ N_("Weld"),
     /* structName */ "WeldModifierData",
     /* structSize */ sizeof(WeldModifierData),
     /* srna */ &RNA_WeldModifier,
@@ -218,5 +217,3 @@ ModifierTypeInfo modifierType_Weld = {
     /* blendWrite */ nullptr,
     /* blendRead */ nullptr,
 };
-
-/** \} */

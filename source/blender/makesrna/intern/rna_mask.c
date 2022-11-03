@@ -165,9 +165,9 @@ static void rna_Mask_layer_active_index_range(
   *softmax = *max;
 }
 
-static char *rna_MaskLayer_path(PointerRNA *ptr)
+static char *rna_MaskLayer_path(const PointerRNA *ptr)
 {
-  MaskLayer *masklay = (MaskLayer *)ptr->data;
+  const MaskLayer *masklay = (MaskLayer *)ptr->data;
   char name_esc[sizeof(masklay->name) * 2];
   BLI_str_escape(name_esc, masklay->name, sizeof(name_esc));
   return BLI_sprintfN("layers[\"%s\"]", name_esc);
@@ -1025,7 +1025,8 @@ static void rna_def_mask_layer(BlenderRNA *brna)
   RNA_def_property_enum_sdna(prop, NULL, "falloff");
   RNA_def_property_enum_items(prop, rna_enum_proportional_falloff_curve_only_items);
   RNA_def_property_ui_text(prop, "Falloff", "Falloff type the feather");
-  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_CURVE); /* Abusing id_curve :/ */
+  RNA_def_property_translation_context(prop,
+                                       BLT_I18NCONTEXT_ID_CURVE_LEGACY); /* Abusing id_curve :/ */
   RNA_def_property_update(prop, NC_MASK | NA_EDITED, NULL);
 
   /* filling options */

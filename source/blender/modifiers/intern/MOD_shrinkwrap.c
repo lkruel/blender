@@ -30,6 +30,7 @@
 #include "UI_resources.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "DEG_depsgraph_query.h"
 
@@ -47,9 +48,7 @@ static void initData(ModifierData *md)
   MEMCPY_STRUCT_AFTER(smd, DNA_struct_default_get(ShrinkwrapModifierData), modifier);
 }
 
-static void requiredDataMask(Object *UNUSED(ob),
-                             ModifierData *md,
-                             CustomData_MeshMasks *r_cddata_masks)
+static void requiredDataMask(ModifierData *md, CustomData_MeshMasks *r_cddata_masks)
 {
   ShrinkwrapModifierData *smd = (ShrinkwrapModifierData *)md;
 
@@ -97,7 +96,7 @@ static void deformVerts(ModifierData *md,
                         const ModifierEvalContext *ctx,
                         Mesh *mesh,
                         float (*vertexCos)[3],
-                        int numVerts)
+                        int verts_num)
 {
   ShrinkwrapModifierData *swmd = (ShrinkwrapModifierData *)md;
   struct Scene *scene = DEG_get_evaluated_scene(ctx->depsgraph);
@@ -107,15 +106,15 @@ static void deformVerts(ModifierData *md,
       (swmd->shrinkType == MOD_SHRINKWRAP_PROJECT)) {
     /* mesh_src is needed for vgroups, but also used as ShrinkwrapCalcData.vert when projecting.
      * Avoid time-consuming mesh conversion for curves when not projecting. */
-    mesh_src = MOD_deform_mesh_eval_get(ctx->object, NULL, mesh, NULL, numVerts, false, false);
+    mesh_src = MOD_deform_mesh_eval_get(ctx->object, NULL, mesh, NULL, verts_num, false);
   }
 
-  struct MDeformVert *dvert = NULL;
+  const MDeformVert *dvert = NULL;
   int defgrp_index = -1;
   MOD_get_vgroup(ctx->object, mesh_src, swmd->vgroup_name, &dvert, &defgrp_index);
 
   shrinkwrapModifier_deform(
-      swmd, ctx, scene, ctx->object, mesh_src, dvert, defgrp_index, vertexCos, numVerts);
+      swmd, ctx, scene, ctx->object, mesh_src, dvert, defgrp_index, vertexCos, verts_num);
 
   if (!ELEM(mesh_src, NULL, mesh)) {
     BKE_id_free(NULL, mesh_src);
@@ -127,29 +126,29 @@ static void deformVertsEM(ModifierData *md,
                           struct BMEditMesh *editData,
                           Mesh *mesh,
                           float (*vertexCos)[3],
-                          int numVerts)
+                          int verts_num)
 {
   ShrinkwrapModifierData *swmd = (ShrinkwrapModifierData *)md;
   struct Scene *scene = DEG_get_evaluated_scene(ctx->depsgraph);
   Mesh *mesh_src = NULL;
 
   if ((swmd->vgroup_name[0] != '\0') || (swmd->shrinkType == MOD_SHRINKWRAP_PROJECT)) {
-    mesh_src = MOD_deform_mesh_eval_get(ctx->object, editData, mesh, NULL, numVerts, false, false);
+    mesh_src = MOD_deform_mesh_eval_get(ctx->object, editData, mesh, NULL, verts_num, false);
   }
 
-  /* TODO(Campbell): use edit-mode data only (remove this line). */
+  /* TODO(@campbellbarton): use edit-mode data only (remove this line). */
   if (mesh_src != NULL) {
     BKE_mesh_wrapper_ensure_mdata(mesh_src);
   }
 
-  struct MDeformVert *dvert = NULL;
+  const MDeformVert *dvert = NULL;
   int defgrp_index = -1;
   if (swmd->vgroup_name[0] != '\0') {
     MOD_get_vgroup(ctx->object, mesh_src, swmd->vgroup_name, &dvert, &defgrp_index);
   }
 
   shrinkwrapModifier_deform(
-      swmd, ctx, scene, ctx->object, mesh_src, dvert, defgrp_index, vertexCos, numVerts);
+      swmd, ctx, scene, ctx->object, mesh_src, dvert, defgrp_index, vertexCos, verts_num);
 
   if (!ELEM(mesh_src, NULL, mesh)) {
     BKE_id_free(NULL, mesh_src);
@@ -184,7 +183,7 @@ static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphConte
       DEG_add_special_eval_flag(ctx->node, &smd->auxTarget->id, DAG_EVAL_NEED_SHRINKWRAP_BOUNDARY);
     }
   }
-  DEG_add_modifier_to_transform_relation(ctx->node, "Shrinkwrap Modifier");
+  DEG_add_depends_on_transform_relation(ctx->node, "Shrinkwrap Modifier");
 }
 
 static bool dependsOnNormals(ModifierData *md)
@@ -258,7 +257,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 ModifierTypeInfo modifierType_Shrinkwrap = {
-    /* name */ "Shrinkwrap",
+    /* name */ N_("Shrinkwrap"),
     /* structName */ "ShrinkwrapModifierData",
     /* structSize */ sizeof(ShrinkwrapModifierData),
     /* srna */ &RNA_ShrinkwrapModifier,

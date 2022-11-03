@@ -9,6 +9,7 @@
 
 #include "BLI_compiler_attrs.h"
 #include "DNA_object_enums.h"
+#include "DNA_userdef_enums.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,6 +66,7 @@ Object **ED_object_array_in_mode_or_selected(struct bContext *C,
                                              uint *r_objects_len);
 
 /* object_utils.c */
+
 bool ED_object_calc_active_center_for_editmode(struct Object *obedit,
                                                bool select_only,
                                                float r_center[3]);
@@ -110,6 +112,7 @@ struct XFormObjectSkipChild_Container;
 struct XFormObjectSkipChild_Container *ED_object_xform_skip_child_container_create(void);
 void ED_object_xform_skip_child_container_item_ensure_from_array(
     struct XFormObjectSkipChild_Container *xcs,
+    const struct Scene *scene,
     struct ViewLayer *view_layer,
     struct Object **objects,
     uint objects_len);
@@ -125,6 +128,7 @@ void ED_object_xform_skip_child_container_item_ensure(struct XFormObjectSkipChil
 void ED_object_xform_array_m4(struct Object **objects, uint objects_len, const float matrix[4][4]);
 
 /* object_ops.c */
+
 void ED_operatortypes_object(void);
 void ED_operatormacros_object(void);
 void ED_keymap_object(struct wmKeyConfig *keyconf);
@@ -210,16 +214,20 @@ void ED_object_base_free_and_unlink(struct Main *bmain, struct Scene *scene, str
 void ED_object_base_free_and_unlink_no_indirect_check(struct Main *bmain,
                                                       struct Scene *scene,
                                                       struct Object *ob);
-bool ED_object_base_deselect_all_ex(struct ViewLayer *view_layer,
+bool ED_object_base_deselect_all_ex(const struct Scene *scene,
+                                    struct ViewLayer *view_layer,
                                     struct View3D *v3d,
                                     int action,
                                     bool *r_any_visible);
-bool ED_object_base_deselect_all(struct ViewLayer *view_layer, struct View3D *v3d, int action);
+bool ED_object_base_deselect_all(const struct Scene *scene,
+                                 struct ViewLayer *view_layer,
+                                 struct View3D *v3d,
+                                 int action);
 
 /**
  * Single object duplicate, if `dupflag == 0`, fully linked, else it uses the flags given.
  * Leaves selection of base/object unaltered.
- * \note don't call this within a loop since clear_* funcs loop over the entire database.
+ * \note don't call this within a loop since clear_* functions loop over the entire database.
  * \note caller must do `DAG_relations_tag_update(bmain);`
  * this is not done automatic since we may duplicate many objects in a batch.
  */
@@ -231,7 +239,7 @@ struct Base *ED_object_add_duplicate(struct Main *bmain,
 
 void ED_object_parent(struct Object *ob, struct Object *parent, int type, const char *substr);
 char *ED_object_ot_drop_named_material_tooltip(struct bContext *C,
-                                               struct PointerRNA *properties,
+                                               const char *name,
                                                const int mval[2]);
 
 /* bitflags for enter/exit editmode */
@@ -379,6 +387,8 @@ struct Object *ED_object_add_type(struct bContext *C,
  * Not an especially efficient function, only added so the single user button can be functional.
  */
 void ED_object_single_user(struct Main *bmain, struct Scene *scene, struct Object *ob);
+
+void ED_object_single_obdata_user(struct Main *bmain, struct Scene *scene, struct Object *ob);
 
 /* object motion paths */
 
@@ -531,12 +541,13 @@ bool ED_object_modifier_move_to_index(struct ReportList *reports,
                                       struct ModifierData *md,
                                       int index);
 
-bool ED_object_modifier_convert(struct ReportList *reports,
-                                struct Main *bmain,
-                                struct Depsgraph *depsgraph,
-                                struct ViewLayer *view_layer,
-                                struct Object *ob,
-                                struct ModifierData *md);
+bool ED_object_modifier_convert_psys_to_mesh(struct ReportList *reports,
+                                             struct Main *bmain,
+                                             struct Depsgraph *depsgraph,
+                                             struct Scene *scene,
+                                             struct ViewLayer *view_layer,
+                                             struct Object *ob,
+                                             struct ModifierData *md);
 bool ED_object_modifier_apply(struct Main *bmain,
                               struct ReportList *reports,
                               struct Depsgraph *depsgraph,
@@ -578,6 +589,7 @@ bool ED_object_iter_other(struct Main *bmain,
 bool ED_object_multires_update_totlevels_cb(struct Object *ob, void *totlevel_v);
 
 /* object_greasepencil_modifier.c */
+
 struct GpencilModifierData *ED_object_gpencil_modifier_add(struct ReportList *reports,
                                                            struct Main *bmain,
                                                            struct Scene *scene,
@@ -612,6 +624,7 @@ void ED_object_gpencil_modifier_copy_to_object(struct Object *ob_dst,
                                                struct GpencilModifierData *md);
 
 /* object_shader_fx.c */
+
 struct ShaderFxData *ED_object_shaderfx_add(struct ReportList *reports,
                                             struct Main *bmain,
                                             struct Scene *scene,
@@ -637,6 +650,7 @@ void ED_object_shaderfx_link(struct Object *dst, struct Object *src);
 void ED_object_shaderfx_copy(struct Object *dst, struct ShaderFxData *fx);
 
 /* object_select.c */
+
 void ED_object_select_linked_by_id(struct bContext *C, struct ID *id);
 
 const struct EnumPropertyItem *ED_object_vgroup_selection_itemf_helper(
@@ -654,7 +668,9 @@ void ED_object_check_force_modifiers(struct Main *bmain,
  * If id is not already an Object, try to find an object that uses it as data.
  * Prefers active, then selected, then visible/selectable.
  */
-struct Base *ED_object_find_first_by_data_id(struct ViewLayer *view_layer, struct ID *id);
+struct Base *ED_object_find_first_by_data_id(const struct Scene *scene,
+                                             struct ViewLayer *view_layer,
+                                             struct ID *id);
 
 /**
  * Select and make the target object active in the view layer.
@@ -687,6 +703,7 @@ void ED_object_facemap_face_add(struct Object *ob, struct bFaceMap *fmap, int fa
 void ED_object_facemap_face_remove(struct Object *ob, struct bFaceMap *fmap, int facenum);
 
 /* object_data_transform.c */
+
 struct XFormObjectData *ED_object_data_xform_create_ex(struct ID *id, bool is_edit_mode);
 struct XFormObjectData *ED_object_data_xform_create(struct ID *id);
 struct XFormObjectData *ED_object_data_xform_create_from_edit_mode(ID *id);

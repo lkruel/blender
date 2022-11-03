@@ -60,6 +60,7 @@
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
 #include "IMB_moviecache.h"
+#include "IMB_openexr.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_query.h"
@@ -67,10 +68,6 @@
 #include "GPU_texture.h"
 
 #include "BLO_read_write.h"
-
-#ifdef WITH_OPENEXR
-#  include "intern/openexr/openexr_multi.h"
-#endif
 
 static void free_buffers(MovieClip *clip);
 
@@ -142,12 +139,10 @@ static void movie_clip_foreach_cache(ID *id,
   IDCacheKey key = {
       .id_session_uuid = id->session_uuid,
       .offset_in_ID = offsetof(MovieClip, cache),
-      .cache_v = movie_clip->cache,
   };
   function_callback(id, &key, (void **)&movie_clip->cache, 0, user_data);
 
   key.offset_in_ID = offsetof(MovieClip, tracking.camera.intrinsics);
-  key.cache_v = movie_clip->tracking.camera.intrinsics;
   function_callback(id, &key, (void **)&movie_clip->tracking.camera.intrinsics, 0, user_data);
 }
 
@@ -348,7 +343,7 @@ IDTypeInfo IDType_ID_MC = {
     .foreach_id = movie_clip_foreach_id,
     .foreach_cache = movie_clip_foreach_cache,
     .foreach_path = movie_clip_foreach_path,
-    .owner_get = NULL,
+    .owner_pointer_get = NULL,
 
     .blend_write = movieclip_blend_write,
     .blend_read_data = movieclip_blend_read_data,
@@ -362,7 +357,7 @@ IDTypeInfo IDType_ID_MC = {
 
 /*********************** movieclip buffer loaders *************************/
 
-static int sequence_guess_offset(const char *full_name, int head_len, unsigned short numlen)
+static int sequence_guess_offset(const char *full_name, int head_len, ushort numlen)
 {
   char num[FILE_MAX] = {0};
 
@@ -430,7 +425,7 @@ static int get_timecode(MovieClip *clip, int flag)
 
 static void get_sequence_fname(const MovieClip *clip, const int framenr, char *name)
 {
-  unsigned short numlen;
+  ushort numlen;
   char head[FILE_MAX], tail[FILE_MAX];
   int offset;
 
@@ -652,7 +647,7 @@ static void movieclip_calc_length(MovieClip *clip)
     }
   }
   else if (clip->source == MCLIP_SRC_SEQUENCE) {
-    unsigned short numlen;
+    ushort numlen;
     char name[FILE_MAX], head[FILE_MAX], tail[FILE_MAX];
 
     BLI_path_sequence_decode(clip->filepath, head, tail, &numlen);
@@ -740,7 +735,7 @@ static int user_frame_to_cache_frame(MovieClip *clip, int framenr)
 
   if (clip->source == MCLIP_SRC_SEQUENCE) {
     if (clip->cache->sequence_offset == -1) {
-      unsigned short numlen;
+      ushort numlen;
       char head[FILE_MAX], tail[FILE_MAX];
 
       BLI_path_sequence_decode(clip->filepath, head, tail, &numlen);
@@ -768,7 +763,7 @@ static void moviecache_keydata(void *userkey, int *framenr, int *proxy, int *ren
   *render_flags = key->render_flag;
 }
 
-static unsigned int moviecache_hashhash(const void *keyv)
+static uint moviecache_hashhash(const void *keyv)
 {
   const MovieClipImBufCacheKey *key = keyv;
   int rval = key->framenr;
@@ -885,7 +880,7 @@ static bool put_imbuf_cache(
     clip->cache->moviecache = moviecache;
     clip->cache->sequence_offset = -1;
     if (clip->source == MCLIP_SRC_SEQUENCE) {
-      unsigned short numlen;
+      ushort numlen;
       BLI_path_sequence_decode(clip->filepath, NULL, NULL, &numlen);
       clip->cache->is_still_sequence = (numlen == 0);
     }
@@ -1609,8 +1604,10 @@ void BKE_movieclip_get_cache_segments(MovieClip *clip,
   if (clip->cache) {
     int proxy = rendersize_to_proxy(user, clip->flag);
 
+    BLI_thread_lock(LOCK_MOVIECLIP);
     IMB_moviecache_get_cache_segments(
         clip->cache->moviecache, proxy, user->render_flag, r_totseg, r_points);
+    BLI_thread_unlock(LOCK_MOVIECLIP);
   }
 }
 
@@ -2088,8 +2085,7 @@ GPUTexture *BKE_movieclip_get_gpu_texture(MovieClip *clip, MovieClipUser *cuser)
   /* This only means RGBA16F instead of RGBA32F. */
   const bool high_bitdepth = false;
   const bool store_premultiplied = ibuf->rect_float ? false : true;
-  *tex = IMB_create_gpu_texture(
-      clip->id.name + 2, ibuf, high_bitdepth, store_premultiplied, false);
+  *tex = IMB_create_gpu_texture(clip->id.name + 2, ibuf, high_bitdepth, store_premultiplied);
 
   /* Do not generate mips for movieclips... too slow. */
   GPU_texture_mipmap_mode(*tex, false, true);

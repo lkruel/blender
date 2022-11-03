@@ -2,7 +2,7 @@
 
 set(INC
   .
-  ../
+  ..
   ../intern
   ../../editors/include
   ../../blenkernel
@@ -15,6 +15,9 @@ set(INC
   ../../render
   ../../windowmanager
   ../../../../intern/guardedalloc
+  ../../bmesh
+  # RNA_prototypes.h
+  ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
 
@@ -22,6 +25,7 @@ set(SRC
   nodes/node_texture_at.c
   nodes/node_texture_bricks.c
   nodes/node_texture_checker.c
+  nodes/node_texture_combine_color.c
   nodes/node_texture_common.c
   nodes/node_texture_compose.c
   nodes/node_texture_coord.c
@@ -37,6 +41,7 @@ set(SRC
   nodes/node_texture_proc.c
   nodes/node_texture_rotate.c
   nodes/node_texture_scale.c
+  nodes/node_texture_separate_color.c
   nodes/node_texture_texture.c
   nodes/node_texture_translate.c
   nodes/node_texture_valToNor.c
@@ -52,19 +57,7 @@ set(LIB
   bf_nodes
 )
 
-if(WITH_PYTHON)
-  list(APPEND INC
-    ../../python
-  )
-  list(APPEND INC_SYS
-    ${PYTHON_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${PYTHON_LINKFLAGS}
-    ${PYTHON_LIBRARIES}
-  )
-  add_definitions(-DWITH_PYTHON)
-endif()
-
-
 blender_add_lib(bf_nodes_texture "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+
+# RNA_prototypes.h
+add_dependencies(bf_nodes_texture bf_rna)

@@ -15,7 +15,7 @@
 #include "BLI_color.hh"
 #include "BLI_math.h"
 #include "BLI_math_base_safe.h"
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_rand.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
@@ -58,6 +58,8 @@
 
 #include "RE_pipeline.h"
 #include "RE_texture.h"
+
+#include "RNA_access.h"
 
 bool sh_node_poll_default(struct bNodeType *ntype,
                           struct bNodeTree *ntree,

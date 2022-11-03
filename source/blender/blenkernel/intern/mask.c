@@ -249,7 +249,7 @@ IDTypeInfo IDType_ID_MSK = {
     .foreach_id = mask_foreach_id,
     .foreach_cache = NULL,
     .foreach_path = NULL,
-    .owner_get = NULL,
+    .owner_pointer_get = NULL,
 
     .blend_write = mask_blend_write,
     .blend_read_data = mask_blend_read_data,
@@ -308,7 +308,7 @@ BezTriple *BKE_mask_spline_point_next_bezt(MaskSpline *spline,
     return NULL;
   }
 
-  return &((point + 1))->bezt;
+  return &(point + 1)->bezt;
 }
 
 MaskSplinePoint *BKE_mask_spline_point_array(MaskSpline *spline)
@@ -609,7 +609,7 @@ float BKE_mask_spline_project_co(MaskSpline *spline,
 
         if (len_squared_v2(v1) > proj_eps_sq) {
           ang1 = angle_v2v2(v1, n1);
-          if (ang1 > (float)M_PI / 2.0f) {
+          if (ang1 > (float)M_PI_2) {
             ang1 = (float)M_PI - ang1;
           }
 
@@ -635,7 +635,7 @@ float BKE_mask_spline_project_co(MaskSpline *spline,
 
         if (len_squared_v2(v2) > proj_eps_sq) {
           ang2 = angle_v2v2(v2, n2);
-          if (ang2 > (float)M_PI / 2.0f) {
+          if (ang2 > (float)M_PI_2) {
             ang2 = (float)M_PI - ang2;
           }
 
@@ -1374,7 +1374,7 @@ static void mask_calc_point_handle(MaskSplinePoint *point,
   else if (handle_type == HD_AUTO) {
     BKE_nurb_handle_calc(bezt, bezt_prev, bezt_next, 0, 0);
   }
-  else if (handle_type == HD_ALIGN || handle_type == HD_ALIGN_DOUBLESIDE) {
+  else if (ELEM(handle_type, HD_ALIGN, HD_ALIGN_DOUBLESIDE)) {
     float v1[3], v2[3];
     float vec[3], h[3];
 
@@ -1579,7 +1579,7 @@ void BKE_mask_parent_init(MaskParent *parent)
   parent->id_type = ID_MC;
 }
 
-/* *** own animation/shapekey implementation ***
+/* *** own animation/shape-key implementation ***
  * BKE_mask_layer_shape_XXX */
 
 int BKE_mask_layer_shape_totvert(MaskLayer *masklay)

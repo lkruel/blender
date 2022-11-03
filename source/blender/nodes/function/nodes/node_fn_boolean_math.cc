@@ -22,7 +22,7 @@ static void fn_node_boolean_math_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Bool>(N_("Boolean"));
 }
 
-static void fn_node_boolean_math_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void fn_node_boolean_math_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "operation", 0, "", ICON_NONE);
 }
@@ -34,7 +34,7 @@ static void node_boolean_math_update(bNodeTree *ntree, bNode *node)
   nodeSetSocketAvailability(ntree, sockB, !ELEM(node->custom1, NODE_BOOLEAN_MATH_NOT));
 }
 
-static void node_boolean_math_label(const bNodeTree *UNUSED(ntree),
+static void node_boolean_math_label(const bNodeTree * /*tree*/,
                                     const bNode *node,
                                     char *label,
                                     int maxlen)
@@ -68,25 +68,26 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
   }
 }
 
-static const fn::MultiFunction *get_multi_function(bNode &bnode)
+static const fn::MultiFunction *get_multi_function(const bNode &bnode)
 {
-  static fn::CustomMF_SI_SI_SO<bool, bool, bool> and_fn{"And",
-                                                        [](bool a, bool b) { return a && b; }};
-  static fn::CustomMF_SI_SI_SO<bool, bool, bool> or_fn{"Or",
-                                                       [](bool a, bool b) { return a || b; }};
-  static fn::CustomMF_SI_SO<bool, bool> not_fn{"Not", [](bool a) { return !a; }};
-  static fn::CustomMF_SI_SI_SO<bool, bool, bool> nand_fn{"Not And",
-                                                         [](bool a, bool b) { return !(a && b); }};
-  static fn::CustomMF_SI_SI_SO<bool, bool, bool> nor_fn{"Nor",
-                                                        [](bool a, bool b) { return !(a || b); }};
-  static fn::CustomMF_SI_SI_SO<bool, bool, bool> xnor_fn{"Equal",
-                                                         [](bool a, bool b) { return a == b; }};
-  static fn::CustomMF_SI_SI_SO<bool, bool, bool> xor_fn{"Not Equal",
-                                                        [](bool a, bool b) { return a != b; }};
-  static fn::CustomMF_SI_SI_SO<bool, bool, bool> imply_fn{"Imply",
-                                                          [](bool a, bool b) { return !a || b; }};
-  static fn::CustomMF_SI_SI_SO<bool, bool, bool> nimply_fn{"Subtract",
-                                                           [](bool a, bool b) { return a && !b; }};
+  static auto exec_preset = fn::CustomMF_presets::AllSpanOrSingle();
+  static fn::CustomMF_SI_SI_SO<bool, bool, bool> and_fn{
+      "And", [](bool a, bool b) { return a && b; }, exec_preset};
+  static fn::CustomMF_SI_SI_SO<bool, bool, bool> or_fn{
+      "Or", [](bool a, bool b) { return a || b; }, exec_preset};
+  static fn::CustomMF_SI_SO<bool, bool> not_fn{"Not", [](bool a) { return !a; }, exec_preset};
+  static fn::CustomMF_SI_SI_SO<bool, bool, bool> nand_fn{
+      "Not And", [](bool a, bool b) { return !(a && b); }, exec_preset};
+  static fn::CustomMF_SI_SI_SO<bool, bool, bool> nor_fn{
+      "Nor", [](bool a, bool b) { return !(a || b); }, exec_preset};
+  static fn::CustomMF_SI_SI_SO<bool, bool, bool> xnor_fn{
+      "Equal", [](bool a, bool b) { return a == b; }, exec_preset};
+  static fn::CustomMF_SI_SI_SO<bool, bool, bool> xor_fn{
+      "Not Equal", [](bool a, bool b) { return a != b; }, exec_preset};
+  static fn::CustomMF_SI_SI_SO<bool, bool, bool> imply_fn{
+      "Imply", [](bool a, bool b) { return !a || b; }, exec_preset};
+  static fn::CustomMF_SI_SI_SO<bool, bool, bool> nimply_fn{
+      "Subtract", [](bool a, bool b) { return a && !b; }, exec_preset};
 
   switch (bnode.custom1) {
     case NODE_BOOLEAN_MATH_AND:

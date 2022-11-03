@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# <pep8 compliant>
-
 import bpy
 
 from mathutils import Vector
@@ -43,7 +41,7 @@ def rna_idprop_context_value(context, context_member, property_type):
         rna_item = pin_id
         context_member = "space_data.pin_id"
     else:
-        rna_item = eval("context." + context_member)
+        rna_item = context.path_resolve(context_member)
 
     return rna_item, context_member
 
@@ -129,7 +127,7 @@ def draw(layout, context, context_member, property_type, *, use_edit=True):
         use_edit = False
     is_lib_override = rna_item.id_data.override_library and rna_item.id_data.override_library.reference
 
-    assert(isinstance(rna_item, property_type))
+    assert isinstance(rna_item, property_type)
 
     items = list(rna_item.items())
     items.sort()
@@ -185,7 +183,7 @@ def draw(layout, context, context_member, property_type, *, use_edit=True):
 
         # Do not allow editing of overridden properties (we cannot use a poll function
         # of the operators here since they's have no access to the specific property).
-        operator_row.enabled = not(is_lib_override and key in rna_item.id_data.override_library.reference)
+        operator_row.enabled = not (is_lib_override and key in rna_item.id_data.override_library.reference)
 
         if use_edit:
             if is_rna:
@@ -203,6 +201,7 @@ def draw(layout, context, context_member, property_type, *, use_edit=True):
         else:
             # Add some spacing, so the right side of the buttons line up with layouts with decorators.
             operator_row.label(text="", icon='BLANK1')
+
 
 class PropertyPanel:
     """

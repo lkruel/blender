@@ -33,6 +33,7 @@
 #include "interface_intern.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #ifdef WITH_PYTHON
 #  include "BPY_extern.h"
@@ -201,7 +202,14 @@ static uiBlock *menu_add_shortcut(bContext *C, ARegion *region, void *arg)
   /* XXX this guess_opname can potentially return a different keymap
    * than being found on adding later... */
   wmKeyMap *km = WM_keymap_guess_opname(C, idname);
-  wmKeyMapItem *kmi = WM_keymap_add_item(km, idname, EVT_AKEY, KM_PRESS, 0, 0);
+  wmKeyMapItem *kmi = WM_keymap_add_item(km,
+                                         idname,
+                                         &(const KeyMapItem_Params){
+                                             .type = EVT_AKEY,
+                                             .value = KM_PRESS,
+                                             .modifier = 0,
+                                             .direction = KM_ANY,
+                                         });
   const int kmi_id = kmi->id;
 
   /* This takes ownership of prop, or prop can be NULL for reset. */
@@ -919,11 +927,11 @@ bool ui_popup_context_menu_for_button(bContext *C, uiBut *but, const wmEvent *ev
 
   {
     const ARegion *region = CTX_wm_menu(C) ? CTX_wm_menu(C) : CTX_wm_region(C);
-    uiButTreeRow *treerow_but = (uiButTreeRow *)ui_tree_row_find_mouse_over(region, event->xy);
-    if (treerow_but) {
-      BLI_assert(treerow_but->but.type == UI_BTYPE_TREEROW);
-      UI_tree_view_item_context_menu_build(
-          C, treerow_but->tree_item, uiLayoutColumn(layout, false));
+    uiButViewItem *view_item_but = (uiButViewItem *)ui_view_item_find_mouse_over(region,
+                                                                                 event->xy);
+    if (view_item_but) {
+      BLI_assert(view_item_but->but.type == UI_BTYPE_VIEW_ITEM);
+      UI_view_item_context_menu_build(C, view_item_but->view_item, uiLayoutColumn(layout, false));
       uiItemS(layout);
     }
   }
@@ -941,6 +949,12 @@ bool ui_popup_context_menu_for_button(bContext *C, uiBut *but, const wmEvent *ev
     sub = uiLayoutColumn(layout, true);
     uiLayoutSetEnabled(sub, id->asset_data);
     uiItemO(sub, NULL, ICON_NONE, "ASSET_OT_clear");
+    uiItemS(layout);
+  }
+
+  MenuType *mt_idtemplate_liboverride = WM_menutype_find("UI_MT_idtemplate_liboverride", true);
+  if (mt_idtemplate_liboverride && mt_idtemplate_liboverride->poll(C, mt_idtemplate_liboverride)) {
+    uiItemM_ptr(layout, mt_idtemplate_liboverride, IFACE_("Library Override"), ICON_NONE);
     uiItemS(layout);
   }
 
@@ -1036,7 +1050,7 @@ bool ui_popup_context_menu_for_button(bContext *C, uiBut *but, const wmEvent *ev
 
     /* We do have a shortcut, but only keyboard ones are editable that way... */
     if (kmi) {
-      if (ISKEYBOARD(kmi->type)) {
+      if (ISKEYBOARD(kmi->type) || ISNDOF_BUTTON(kmi->type)) {
 #if 0 /* would rather use a block but, but gets weirdly positioned... */
         uiDefBlockBut(block,
                       menu_change_shortcut,
@@ -1216,7 +1230,7 @@ bool ui_popup_context_menu_for_button(bContext *C, uiBut *but, const wmEvent *ev
     }
   }
 
-  MenuType *mt = WM_menutype_find("WM_MT_button_context", true);
+  MenuType *mt = WM_menutype_find("UI_MT_button_context_menu", true);
   if (mt) {
     UI_menutype_draw(C, mt, uiLayoutColumn(layout, false));
   }

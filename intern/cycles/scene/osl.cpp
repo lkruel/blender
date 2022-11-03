@@ -17,7 +17,6 @@
 
 #  include "kernel/osl/globals.h"
 #  include "kernel/osl/services.h"
-#  include "kernel/osl/shader.h"
 
 #  include "util/aligned_malloc.h"
 #  include "util/foreach.h"
@@ -78,6 +77,18 @@ void OSLShaderManager::reset(Scene * /*scene*/)
   shading_system_init();
 }
 
+uint64_t OSLShaderManager::get_attribute_id(ustring name)
+{
+  return name.hash();
+}
+
+uint64_t OSLShaderManager::get_attribute_id(AttributeStandard std)
+{
+  /* if standard attribute, use geom: name convention */
+  ustring stdname(string("geom:") + string(Attribute::standard_name(std)));
+  return stdname.hash();
+}
+
 void OSLShaderManager::device_update_specific(Device *device,
                                               DeviceScene *dscene,
                                               Scene *scene,
@@ -92,7 +103,7 @@ void OSLShaderManager::device_update_specific(Device *device,
     }
   });
 
-  VLOG(1) << "Total " << scene->shaders.size() << " shaders.";
+  VLOG_INFO << "Total " << scene->shaders.size() << " shaders.";
 
   device_free(device, dscene, scene);
 
@@ -240,7 +251,7 @@ void OSLShaderManager::shading_system_init()
     ss_shared->attribute("searchpath:shader", shader_path);
     ss_shared->attribute("greedyjit", 1);
 
-    VLOG(1) << "Using shader search path: " << shader_path;
+    VLOG_INFO << "Using shader search path: " << shader_path;
 
     /* our own ray types */
     static const char *raytypes[] = {
@@ -286,7 +297,7 @@ void OSLShaderManager::shading_system_init()
     const int nraytypes = sizeof(raytypes) / sizeof(raytypes[0]);
     ss_shared->attribute("raytypes", TypeDesc(TypeDesc::STRING, nraytypes), raytypes);
 
-    OSLShader::register_closures((OSLShadingSystem *)ss_shared);
+    OSLRenderServices::register_closures(ss_shared);
 
     loaded_shaders.clear();
   }
@@ -1211,14 +1222,15 @@ void OSLCompiler::parameter_texture(const char *name, ustring filename, ustring 
   parameter(name, filename);
 }
 
-void OSLCompiler::parameter_texture(const char *name, int svm_slot)
+void OSLCompiler::parameter_texture(const char *name, const ImageHandle &handle)
 {
   /* Texture loaded through SVM image texture system. We generate a unique
    * name, which ends up being used in OSLRenderServices::get_texture_handle
    * to get handle again. Note that this name must be unique between multiple
    * render sessions as the render services are shared. */
   ustring filename(string_printf("@svm%d", texture_shared_unique_id++).c_str());
-  services->textures.insert(filename, new OSLTextureHandle(OSLTextureHandle::SVM, svm_slot));
+  services->textures.insert(filename,
+                            new OSLTextureHandle(OSLTextureHandle::SVM, handle.get_svm_slots()));
   parameter(name, filename);
 }
 
@@ -1290,7 +1302,7 @@ void OSLCompiler::parameter_texture(const char * /* name */,
 {
 }
 
-void OSLCompiler::parameter_texture(const char * /* name */, int /* svm_slot */)
+void OSLCompiler::parameter_texture(const char * /* name */, const ImageHandle & /*handle*/)
 {
 }
 

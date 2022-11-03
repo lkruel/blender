@@ -21,14 +21,14 @@ static void sh_node_valtorgb_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Float>(N_("Alpha"));
 }
 
-static void node_shader_init_valtorgb(bNodeTree *UNUSED(ntree), bNode *node)
+static void node_shader_init_valtorgb(bNodeTree * /*ntree*/, bNode *node)
 {
   node->storage = BKE_colorband_add(true);
 }
 
 static int gpu_shader_valtorgb(GPUMaterial *mat,
                                bNode *node,
-                               bNodeExecData *UNUSED(execdata),
+                               bNodeExecData * /*execdata*/,
                                GPUNodeStack *in,
                                GPUNodeStack *out)
 {
@@ -87,37 +87,35 @@ static int gpu_shader_valtorgb(GPUMaterial *mat,
   return GPU_stack_link(mat, node, "valtorgb", in, out, tex, GPU_constant(&layer));
 }
 
-class ColorBandFunction : public blender::fn::MultiFunction {
+class ColorBandFunction : public fn::MultiFunction {
  private:
   const ColorBand &color_band_;
 
  public:
   ColorBandFunction(const ColorBand &color_band) : color_band_(color_band)
   {
-    static blender::fn::MFSignature signature = create_signature();
+    static fn::MFSignature signature = create_signature();
     this->set_signature(&signature);
   }
 
-  static blender::fn::MFSignature create_signature()
+  static fn::MFSignature create_signature()
   {
-    blender::fn::MFSignatureBuilder signature{"Color Band"};
+    fn::MFSignatureBuilder signature{"Color Band"};
     signature.single_input<float>("Value");
-    signature.single_output<blender::ColorGeometry4f>("Color");
+    signature.single_output<ColorGeometry4f>("Color");
     signature.single_output<float>("Alpha");
     return signature.build();
   }
 
-  void call(blender::IndexMask mask,
-            blender::fn::MFParams params,
-            blender::fn::MFContext UNUSED(context)) const override
+  void call(IndexMask mask, fn::MFParams params, fn::MFContext /*context*/) const override
   {
-    const blender::VArray<float> &values = params.readonly_single_input<float>(0, "Value");
-    blender::MutableSpan<blender::ColorGeometry4f> colors =
-        params.uninitialized_single_output<blender::ColorGeometry4f>(1, "Color");
-    blender::MutableSpan<float> alphas = params.uninitialized_single_output<float>(2, "Alpha");
+    const VArray<float> &values = params.readonly_single_input<float>(0, "Value");
+    MutableSpan<ColorGeometry4f> colors = params.uninitialized_single_output<ColorGeometry4f>(
+        1, "Color");
+    MutableSpan<float> alphas = params.uninitialized_single_output<float>(2, "Alpha");
 
     for (int64_t i : mask) {
-      blender::ColorGeometry4f color;
+      ColorGeometry4f color;
       BKE_colorband_evaluate(&color_band_, values[i], color);
       colors[i] = color;
       alphas[i] = color.a;
@@ -125,10 +123,9 @@ class ColorBandFunction : public blender::fn::MultiFunction {
   }
 };
 
-static void sh_node_valtorgb_build_multi_function(
-    blender::nodes::NodeMultiFunctionBuilder &builder)
+static void sh_node_valtorgb_build_multi_function(nodes::NodeMultiFunctionBuilder &builder)
 {
-  bNode &bnode = builder.node();
+  const bNode &bnode = builder.node();
   const ColorBand *color_band = (const ColorBand *)bnode.storage;
   builder.construct_and_set_matching_fn<ColorBandFunction>(*color_band);
 }

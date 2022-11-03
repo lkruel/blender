@@ -26,6 +26,7 @@
 #include "UI_resources.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_build.h"
@@ -39,16 +40,14 @@ static void deformVerts(ModifierData *UNUSED(md),
                         const ModifierEvalContext *ctx,
                         Mesh *UNUSED(derivedData),
                         float (*vertexCos)[3],
-                        int numVerts)
+                        int verts_num)
 {
   Scene *scene = DEG_get_evaluated_scene(ctx->depsgraph);
   sbObjectStep(
-      ctx->depsgraph, scene, ctx->object, DEG_get_ctime(ctx->depsgraph), vertexCos, numVerts);
+      ctx->depsgraph, scene, ctx->object, DEG_get_ctime(ctx->depsgraph), vertexCos, verts_num);
 }
 
-static bool dependsOnTime(struct Scene *UNUSED(scene),
-                          ModifierData *UNUSED(md),
-                          const int UNUSED(dag_eval_mode))
+static bool dependsOnTime(struct Scene *UNUSED(scene), ModifierData *UNUSED(md))
 {
   return true;
 }
@@ -67,7 +66,7 @@ static void updateDepsgraph(ModifierData *UNUSED(md), const ModifierUpdateDepsgr
         ctx->node, ctx->object, ctx->object->soft->effector_weights, true, 0, "Softbody Field");
   }
   /* We need own transformation as well. */
-  DEG_add_modifier_to_transform_relation(ctx->node, "SoftBody Modifier");
+  DEG_add_depends_on_transform_relation(ctx->node, "SoftBody Modifier");
 }
 
 static void panel_draw(const bContext *UNUSED(C), Panel *panel)
@@ -87,7 +86,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 ModifierTypeInfo modifierType_Softbody = {
-    /* name */ "Softbody",
+    /* name */ N_("Softbody"),
     /* structName */ "SoftbodyModifierData",
     /* structSize */ sizeof(SoftbodyModifierData),
     /* srna */ &RNA_SoftBodyModifier,

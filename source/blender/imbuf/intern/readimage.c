@@ -22,6 +22,8 @@
 #include "IMB_filetype.h"
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
+#include "IMB_metadata.h"
+#include "IMB_thumbs.h"
 #include "imbuf.h"
 
 #include "IMB_colormanagement.h"
@@ -79,11 +81,8 @@ static void imb_handle_alpha(ImBuf *ibuf,
   colormanage_imbuf_make_linear(ibuf, effective_colorspace);
 }
 
-ImBuf *IMB_ibImageFromMemory(const unsigned char *mem,
-                             size_t size,
-                             int flags,
-                             char colorspace[IM_MAX_SPACE],
-                             const char *descr)
+ImBuf *IMB_ibImageFromMemory(
+    const uchar *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE], const char *descr)
 {
   ImBuf *ibuf;
   const ImFileType *type;
@@ -155,7 +154,7 @@ ImBuf *IMB_loadifffile(
     int file, const char *filepath, int flags, char colorspace[IM_MAX_SPACE], const char *descr)
 {
   ImBuf *ibuf;
-  unsigned char *mem;
+  uchar *mem;
   size_t size;
 
   if (file == -1) {
@@ -187,27 +186,27 @@ ImBuf *IMB_loadifffile(
   return ibuf;
 }
 
-static void imb_cache_filename(char *filename, const char *name, int flags)
+static void imb_cache_filename(char *filepath, const char *name, int flags)
 {
   /* read .tx instead if it exists and is not older */
   if (flags & IB_tilecache) {
-    BLI_strncpy(filename, name, IMB_FILENAME_SIZE);
-    if (!BLI_path_extension_replace(filename, IMB_FILENAME_SIZE, ".tx")) {
+    BLI_strncpy(filepath, name, IMB_FILENAME_SIZE);
+    if (!BLI_path_extension_replace(filepath, IMB_FILENAME_SIZE, ".tx")) {
       return;
     }
 
-    if (BLI_file_older(name, filename)) {
+    if (BLI_file_older(name, filepath)) {
       return;
     }
   }
 
-  BLI_strncpy(filename, name, IMB_FILENAME_SIZE);
+  BLI_strncpy(filepath, name, IMB_FILENAME_SIZE);
 }
 
 ImBuf *IMB_loadiffname(const char *filepath, int flags, char colorspace[IM_MAX_SPACE])
 {
   ImBuf *ibuf;
-  int file, a;
+  int file;
   char filepath_tx[IMB_FILENAME_SIZE];
 
   BLI_assert(!BLI_path_is_rel(filepath));
@@ -224,12 +223,67 @@ ImBuf *IMB_loadiffname(const char *filepath, int flags, char colorspace[IM_MAX_S
   if (ibuf) {
     BLI_strncpy(ibuf->name, filepath, sizeof(ibuf->name));
     BLI_strncpy(ibuf->cachename, filepath_tx, sizeof(ibuf->cachename));
-    for (a = 1; a < ibuf->miptot; a++) {
+    for (int a = 1; a < ibuf->miptot; a++) {
       BLI_strncpy(ibuf->mipmap[a - 1]->cachename, filepath_tx, sizeof(ibuf->cachename));
     }
   }
 
   close(file);
+
+  return ibuf;
+}
+
+struct ImBuf *IMB_thumb_load_image(const char *filepath,
+                                   size_t max_thumb_size,
+                                   char colorspace[IM_MAX_SPACE])
+{
+  const ImFileType *type = IMB_file_type_from_ftype(IMB_ispic_type(filepath));
+  if (type == NULL) {
+    return NULL;
+  }
+
+  ImBuf *ibuf = NULL;
+  int flags = IB_rect | IB_metadata;
+  /* Size of the original image. */
+  size_t width = 0;
+  size_t height = 0;
+
+  char effective_colorspace[IM_MAX_SPACE] = "";
+  if (colorspace) {
+    BLI_strncpy(effective_colorspace, colorspace, sizeof(effective_colorspace));
+  }
+
+  if (type->load_filepath_thumbnail) {
+    ibuf = type->load_filepath_thumbnail(
+        filepath, flags, max_thumb_size, colorspace, &width, &height);
+  }
+  else {
+    /* Skip images of other types if over 100MB. */
+    const size_t file_size = BLI_file_size(filepath);
+    if (file_size != -1 && file_size > THUMB_SIZE_MAX) {
+      return NULL;
+    }
+    ibuf = IMB_loadiffname(filepath, flags, colorspace);
+    if (ibuf) {
+      width = ibuf->x;
+      height = ibuf->y;
+    }
+  }
+
+  if (ibuf) {
+    imb_handle_alpha(ibuf, flags, colorspace, effective_colorspace);
+
+    if (width > 0 && height > 0) {
+      /* Save dimensions of original image into the thumbnail metadata. */
+      char cwidth[40];
+      char cheight[40];
+      SNPRINTF(cwidth, "%zu", width);
+      SNPRINTF(cheight, "%zu", height);
+      IMB_metadata_ensure(&ibuf->metadata);
+      IMB_metadata_set_field(ibuf->metadata, "Thumb::Image::Width", cwidth);
+      IMB_metadata_set_field(ibuf->metadata, "Thumb::Image::Height", cheight);
+    }
+  }
 
   return ibuf;
 }
@@ -262,9 +316,9 @@ ImBuf *IMB_testiffname(const char *filepath, int flags)
   return ibuf;
 }
 
-static void imb_loadtilefile(ImBuf *ibuf, int file, int tx, int ty, unsigned int *rect)
+static void imb_loadtilefile(ImBuf *ibuf, int file, int tx, int ty, uint *rect)
 {
-  unsigned char *mem;
+  uchar *mem;
   size_t size;
 
   if (file == -1) {
@@ -295,7 +349,7 @@ static void imb_loadtilefile(ImBuf *ibuf, int file, int tx, int ty, unsigned int
   imb_mmap_unlock();
 }
 
-void imb_loadtile(ImBuf *ibuf, int tx, int ty, unsigned int *rect)
+void imb_loadtile(ImBuf *ibuf, int tx, int ty, uint *rect)
 {
   int file;
 

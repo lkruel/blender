@@ -13,6 +13,8 @@
 #include "BKE_node_tree_update.h"
 #include "BKE_tracking.h"
 
+#include "BLT_translation.h"
+
 #include "RNA_access.h"
 #include "RNA_define.h"
 
@@ -41,7 +43,7 @@
 
 #  include "WM_api.h"
 
-static char *rna_tracking_path(PointerRNA *UNUSED(ptr))
+static char *rna_tracking_path(const PointerRNA *UNUSED(ptr))
 {
   return BLI_strdup("tracking");
 }
@@ -72,7 +74,7 @@ static void rna_tracking_defaultSettings_searchUpdate(Main *UNUSED(bmain),
   }
 }
 
-static char *rna_trackingTrack_path(PointerRNA *ptr)
+static char *rna_trackingTrack_path(const PointerRNA *ptr)
 {
   MovieClip *clip = (MovieClip *)ptr->owner_id;
   MovieTrackingTrack *track = (MovieTrackingTrack *)ptr->data;
@@ -255,7 +257,7 @@ static void rna_trackingPlaneMarker_frame_set(PointerRNA *ptr, int value)
   }
 }
 
-static char *rna_trackingPlaneTrack_path(PointerRNA *ptr)
+static char *rna_trackingPlaneTrack_path(const PointerRNA *ptr)
 {
   MovieClip *clip = (MovieClip *)ptr->owner_id;
   MovieTrackingPlaneTrack *plane_track = (MovieTrackingPlaneTrack *)ptr->data;
@@ -289,7 +291,7 @@ static void rna_trackingPlaneTrack_name_set(PointerRNA *ptr, const char *value)
   }
 }
 
-static char *rna_trackingCamera_path(PointerRNA *UNUSED(ptr))
+static char *rna_trackingCamera_path(const PointerRNA *UNUSED(ptr))
 {
   return BLI_strdup("tracking.camera");
 }
@@ -321,7 +323,7 @@ static void rna_trackingCamera_focal_mm_set(PointerRNA *ptr, float value)
   }
 }
 
-static char *rna_trackingStabilization_path(PointerRNA *UNUSED(ptr))
+static char *rna_trackingStabilization_path(const PointerRNA *UNUSED(ptr))
 {
   return BLI_strdup("tracking.stabilization");
 }
@@ -557,7 +559,7 @@ static void rna_tracking_markerPattern_update(Main *UNUSED(bmain),
 {
   MovieTrackingMarker *marker = (MovieTrackingMarker *)ptr->data;
 
-  BKE_tracking_marker_clamp(marker, CLAMP_PAT_DIM);
+  BKE_tracking_marker_clamp_search_size(marker);
 }
 
 static void rna_tracking_markerSearch_update(Main *UNUSED(bmain),
@@ -566,7 +568,7 @@ static void rna_tracking_markerSearch_update(Main *UNUSED(bmain),
 {
   MovieTrackingMarker *marker = (MovieTrackingMarker *)ptr->data;
 
-  BKE_tracking_marker_clamp(marker, CLAMP_SEARCH_DIM);
+  BKE_tracking_marker_clamp_search_size(marker);
 }
 
 static void rna_tracking_markerPattern_boundbox_get(PointerRNA *ptr, float *values)
@@ -1638,7 +1640,7 @@ static void rna_def_trackingTrack(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_MOVIECLIP | ND_DISPLAY, NULL);
 
   /* color */
-  prop = RNA_def_property(srna, "color", PROP_FLOAT, PROP_COLOR);
+  prop = RNA_def_property(srna, "color", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_array(prop, 3);
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_text(
@@ -2197,6 +2199,7 @@ static void rna_def_trackingTracks(BlenderRNA *brna)
       prop, "rna_tracking_active_track_get", "rna_tracking_active_track_set", NULL, NULL);
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_UNLINK);
   RNA_def_property_ui_text(prop, "Active Track", "Active track in this tracking data object");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_MOVIECLIP);
 }
 
 static void rna_def_trackingPlaneTracks(BlenderRNA *brna)
@@ -2257,6 +2260,7 @@ static void rna_def_trackingObjectTracks(BlenderRNA *brna)
       prop, "rna_tracking_active_track_get", "rna_tracking_active_track_set", NULL, NULL);
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_UNLINK);
   RNA_def_property_ui_text(prop, "Active Track", "Active track in this tracking data object");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_MOVIECLIP);
 }
 
 static void rna_def_trackingObjectPlaneTracks(BlenderRNA *brna)
@@ -2278,6 +2282,7 @@ static void rna_def_trackingObjectPlaneTracks(BlenderRNA *brna)
                                  NULL);
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_UNLINK);
   RNA_def_property_ui_text(prop, "Active Track", "Active track in this tracking data object");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_MOVIECLIP);
 }
 
 static void rna_def_trackingObject(BlenderRNA *brna)

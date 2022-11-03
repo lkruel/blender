@@ -11,12 +11,9 @@ where <path-to-blender> is the path to the Blender executable,
 and <output-filename> is where to write the generated man page.
 '''
 
-# <pep8 compliant>
-
 import argparse
 import os
 import subprocess
-import sys
 import time
 
 from typing import (
@@ -79,7 +76,9 @@ def blender_extract_info(blender_bin: str) -> Dict[str, str]:
     }
 
 
-def man_page_from_blender_help(fh: TextIO, blender_bin: str) -> None:
+def man_page_from_blender_help(fh: TextIO, blender_bin: str, verbose: bool) -> None:
+    if verbose:
+        print("Extracting help text:", blender_bin)
     blender_info = blender_extract_info(blender_bin)
 
     # Header Content.
@@ -102,10 +101,10 @@ blender \- a full-featured 3D application''')
 .PP
 .B blender
 is a full-featured 3D application. It supports the entirety of the 3D pipeline - '''
-'''modeling, rigging, animation, simulation, rendering, compositing, motion tracking, and video editing.
+             '''modeling, rigging, animation, simulation, rendering, compositing, motion tracking, and video editing.
 
 Use Blender to create 3D images and animations, films and commercials, content for games, '''
-r'''architectural and industrial visualizations, and scientific visualizations.
+             r'''architectural and industrial visualizations, and scientific visualizations.
 
 https://www.blender.org''')
 
@@ -140,7 +139,7 @@ https://www.blender.org''')
 
                 l = lines.pop(0)
                 if l:
-                    assert(l.startswith('\t'))
+                    assert l.startswith('\t')
                     l = l[1:]  # Remove first white-space (tab).
 
                 fh.write('%s\n' % man_format(l))
@@ -178,6 +177,13 @@ def create_argparse() -> argparse.ArgumentParser:
         required=True,
         help="Path to the blender binary."
     )
+    parser.add_argument(
+        "--verbose",
+        default=False,
+        required=False,
+        action='store_true',
+        help="Print additional progress."
+    )
 
     return parser
 
@@ -188,9 +194,12 @@ def main() -> None:
 
     blender_bin = args.blender
     output_filename = args.output
+    verbose = args.verbose
 
     with open(output_filename, "w", encoding="utf-8") as fh:
-        man_page_from_blender_help(fh, blender_bin)
+        man_page_from_blender_help(fh, blender_bin, verbose)
+        if verbose:
+            print("Written:", output_filename)
 
 
 if __name__ == "__main__":

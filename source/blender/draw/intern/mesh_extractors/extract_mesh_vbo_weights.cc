@@ -8,9 +8,10 @@
 #include "MEM_guardedalloc.h"
 
 #include "BKE_deform.h"
+#include "BKE_mesh.h"
 
 #include "draw_subdivision.h"
-#include "extract_mesh.h"
+#include "extract_mesh.hh"
 
 namespace blender::draw {
 
@@ -79,7 +80,7 @@ static float evaluate_vertex_weight(const MDeformVert *dvert, const DRW_MeshWeig
 }
 
 static void extract_weights_init(const MeshRenderData *mr,
-                                 struct MeshBatchCache *cache,
+                                 MeshBatchCache *cache,
                                  void *buf,
                                  void *tls_data)
 {
@@ -105,14 +106,14 @@ static void extract_weights_init(const MeshRenderData *mr,
     data->cd_ofs = CustomData_get_offset(&mr->bm->vdata, CD_MDEFORMVERT);
   }
   else {
-    data->dvert = (const MDeformVert *)CustomData_get_layer(&mr->me->vdata, CD_MDEFORMVERT);
+    data->dvert = mr->me->deform_verts().data();
     data->cd_ofs = -1;
   }
 }
 
-static void extract_weights_iter_poly_bm(const MeshRenderData *UNUSED(mr),
+static void extract_weights_iter_poly_bm(const MeshRenderData * /*mr*/,
                                          const BMFace *f,
-                                         const int UNUSED(f_index),
+                                         const int /*f_index*/,
                                          void *_data)
 {
   MeshExtract_Weight_Data *data = static_cast<MeshExtract_Weight_Data *>(_data);
@@ -133,7 +134,7 @@ static void extract_weights_iter_poly_bm(const MeshRenderData *UNUSED(mr),
 
 static void extract_weights_iter_poly_mesh(const MeshRenderData *mr,
                                            const MPoly *mp,
-                                           const int UNUSED(mp_index),
+                                           const int /*mp_index*/,
                                            void *_data)
 {
   MeshExtract_Weight_Data *data = static_cast<MeshExtract_Weight_Data *>(_data);
@@ -153,10 +154,10 @@ static void extract_weights_iter_poly_mesh(const MeshRenderData *mr,
 }
 
 static void extract_weights_init_subdiv(const DRWSubdivCache *subdiv_cache,
-                                        const MeshRenderData *UNUSED(mr),
-                                        struct MeshBatchCache *cache,
+                                        const MeshRenderData *mr,
+                                        MeshBatchCache *cache,
                                         void *buffer,
-                                        void *UNUSED(data))
+                                        void *_data)
 {
   Mesh *coarse_mesh = subdiv_cache->mesh;
   GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buffer);
@@ -168,32 +169,25 @@ static void extract_weights_init_subdiv(const DRWSubdivCache *subdiv_cache,
   GPU_vertbuf_init_build_on_device(vbo, &format, subdiv_cache->num_subdiv_loops);
 
   GPUVertBuf *coarse_weights = GPU_vertbuf_calloc();
-  GPU_vertbuf_init_with_format(coarse_weights, &format);
-  GPU_vertbuf_data_alloc(coarse_weights, coarse_mesh->totloop);
-  float *coarse_weights_data = static_cast<float *>(GPU_vertbuf_get_data(coarse_weights));
+  extract_weights_init(mr, cache, coarse_weights, _data);
 
-  const DRW_MeshWeightState *wstate = &cache->weight_state;
-  const MDeformVert *dverts = static_cast<const MDeformVert *>(
-      CustomData_get_layer(&coarse_mesh->vdata, CD_MDEFORMVERT));
-
-  for (int i = 0; i < coarse_mesh->totpoly; i++) {
-    const MPoly *mpoly = &coarse_mesh->mpoly[i];
-
-    for (int loop_index = mpoly->loopstart; loop_index < mpoly->loopstart + mpoly->totloop;
-         loop_index++) {
-      const MLoop *ml = &coarse_mesh->mloop[loop_index];
-
-      if (dverts != nullptr) {
-        const MDeformVert *dvert = &dverts[ml->v];
-        coarse_weights_data[loop_index] = evaluate_vertex_weight(dvert, wstate);
-      }
-      else {
-        coarse_weights_data[loop_index] = evaluate_vertex_weight(nullptr, wstate);
-      }
+  if (mr->extract_type != MR_EXTRACT_BMESH) {
+    const Span<MPoly> coarse_polys = coarse_mesh->polys();
+    for (const int i : coarse_polys.index_range()) {
+      const MPoly *mpoly = &coarse_polys[i];
+      extract_weights_iter_poly_mesh(mr, mpoly, i, _data);
+    }
+  }
+  else {
+    BMIter f_iter;
+    BMFace *efa;
+    int face_index = 0;
+    BM_ITER_MESH_INDEX (efa, &f_iter, mr->bm, BM_FACES_OF_MESH, face_index) {
+      extract_weights_iter_poly_bm(mr, efa, face_index, _data);
     }
   }
 
-  draw_subdiv_interp_custom_data(subdiv_cache, coarse_weights, vbo, 1, 0);
+  draw_subdiv_interp_custom_data(subdiv_cache, coarse_weights, vbo, 1, 0, false);
 
   GPU_vertbuf_discard(coarse_weights);
 }
@@ -216,6 +210,4 @@ constexpr MeshExtract create_extractor_weights()
 
 }  // namespace blender::draw
 
-extern "C" {
 const MeshExtract extract_weights = blender::draw::create_extractor_weights();
-}

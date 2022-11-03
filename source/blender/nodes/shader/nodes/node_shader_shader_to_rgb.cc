@@ -14,13 +14,11 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static int node_shader_gpu_shadertorgb(GPUMaterial *mat,
                                        bNode *node,
-                                       bNodeExecData *UNUSED(execdata),
+                                       bNodeExecData * /*execdata*/,
                                        GPUNodeStack *in,
                                        GPUNodeStack *out)
 {
-  /* Because node_shader_to_rgba is using fallback_cubemap()
-   * we need to tag material as glossy. */
-  GPU_material_flag_set(mat, GPU_MATFLAG_GLOSSY);
+  GPU_material_flag_set(mat, GPU_MATFLAG_SHADER_TO_RGBA);
 
   return GPU_stack_link(mat, node, "node_shader_to_rgba", in, out);
 }

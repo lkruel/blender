@@ -131,10 +131,10 @@ static bool track_markers_initjob(bContext *C, TrackMarkersJob *tmj, bool backwa
 
   if (sequence) {
     if (backwards) {
-      tmj->efra = SFRA;
+      tmj->efra = scene->r.sfra;
     }
     else {
-      tmj->efra = EFRA;
+      tmj->efra = scene->r.efra;
     }
     tmj->efra = BKE_movieclip_remap_scene_to_clip_frame(clip, tmj->efra);
   }
@@ -210,6 +210,8 @@ static void track_markers_startjob(
 {
   TrackMarkersJob *tmj = (TrackMarkersJob *)tmv;
   int framenr = tmj->sfra;
+
+  BKE_autotrack_context_start(tmj->context);
 
   while (framenr != tmj->efra) {
     if (tmj->delay > 0) {

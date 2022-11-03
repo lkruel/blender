@@ -12,7 +12,7 @@ set(INC
   ..
 )
 
-set(ALL_CYCLES_LIBRARIES
+set(LIB
   cycles_kernel
   cycles_integrator
   cycles_scene
@@ -22,9 +22,9 @@ set(ALL_CYCLES_LIBRARIES
   cycles_subd
   cycles_device
   cycles_util
-  extern_clew
-  ${CYCLES_GL_LIBRARIES}
 )
+cycles_external_libraries_append(LIB)
+
 include_directories(${INC})
 
 set(SRC
@@ -34,6 +34,7 @@ set(SRC
   render_graph_finalize_test.cpp
   util_aligned_malloc_test.cpp
   util_math_test.cpp
+  util_md5_test.cpp
   util_path_test.cpp
   util_string_test.cpp
   util_task_test.cpp
@@ -59,6 +60,5 @@ if(NOT APPLE)
 endif()
 
 if(WITH_GTESTS)
-  BLENDER_SRC_GTEST(cycles "${SRC}" "${ALL_CYCLES_LIBRARIES}")
-  cycles_target_link_libraries(cycles_test)
+  blender_src_gtest(cycles "${SRC}" "${LIB}")
 endif()

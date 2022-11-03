@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -119,15 +119,7 @@ static void bakeModifier(struct Main *UNUSED(bmain),
                          GpencilModifierData *md,
                          Object *ob)
 {
-  bGPdata *gpd = ob->data;
-
-  LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
-    LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
-      LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
-        deformStroke(md, depsgraph, ob, gpl, gpf, gps);
-      }
-    }
-  }
+  generic_bake_deform_stroke(depsgraph, md, ob, false, deformStroke);
 }
 
 static void foreachIDLink(GpencilModifierData *md, Object *ob, IDWalkFunc walk, void *userData)
@@ -186,7 +178,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 GpencilModifierTypeInfo modifierType_Gpencil_Texture = {
-    /* name */ "TextureMapping",
+    /* name */ N_("TextureMapping"),
     /* structName */ "TextureGpencilModifierData",
     /* structSize */ sizeof(TextureGpencilModifierData),
     /* type */ eGpencilModifierTypeType_Gpencil,

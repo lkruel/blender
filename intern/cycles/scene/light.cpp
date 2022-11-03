@@ -34,7 +34,7 @@ static void shade_background_pixels(Device *device,
                                     Progress &progress)
 {
   /* Needs to be up to data for attribute access. */
-  device->const_copy_to("__data", &dscene->data, sizeof(dscene->data));
+  device->const_copy_to("data", &dscene->data, sizeof(dscene->data));
 
   const int size = width * height;
   const int num_channels = 3;
@@ -123,6 +123,7 @@ NODE_DEFINE(Light)
   SOCKET_BOOLEAN(use_glossy, "Use Glossy", true);
   SOCKET_BOOLEAN(use_transmission, "Use Transmission", true);
   SOCKET_BOOLEAN(use_scatter, "Use Scatter", true);
+  SOCKET_BOOLEAN(use_caustics, "Shadow Caustics", false);
 
   SOCKET_INT(max_bounces, "Max Bounces", 1024);
   SOCKET_UINT(random_id, "Random ID", 0);
@@ -132,6 +133,8 @@ NODE_DEFINE(Light)
   SOCKET_BOOLEAN(is_enabled, "Is Enabled", true);
 
   SOCKET_NODE(shader, "Shader", Shader::get_node_type());
+
+  SOCKET_STRING(lightgroup, "Light Group", ustring());
 
   return type;
 }
@@ -212,7 +215,9 @@ void LightManager::test_enabled_lights(Scene *scene)
      */
     Shader *shader = scene->background->get_shader(scene);
     const bool disable_mis = !(has_portal || shader->has_surface_spatial_varying);
-    VLOG_IF(1, disable_mis) << "Background MIS has been disabled.\n";
+    if (disable_mis) {
+      VLOG_INFO << "Background MIS has been disabled.\n";
+    }
     foreach (Light *light, scene->lights) {
       if (light->light_type == LIGHT_BACKGROUND) {
         light->is_enabled = !disable_mis;
@@ -306,7 +311,7 @@ void LightManager::device_update_distribution(Device *,
   }
 
   size_t num_distribution = num_triangles + num_lights;
-  VLOG(1) << "Total " << num_distribution << " of light distribution primitives.";
+  VLOG_INFO << "Total " << num_distribution << " of light distribution primitives.";
 
   /* emission area */
   KernelLightDistribution *distribution = dscene->light_distribution.alloc(num_distribution + 1);
@@ -652,13 +657,14 @@ void LightManager::device_update_background(Device *device,
   if (res.x == 0) {
     res = environment_res;
     if (res.x > 0 && res.y > 0) {
-      VLOG(2) << "Automatically set World MIS resolution to " << res.x << " by " << res.y << "\n";
+      VLOG_INFO << "Automatically set World MIS resolution to " << res.x << " by " << res.y
+                << "\n";
     }
   }
   /* If it's still unknown, just use the default. */
   if (res.x == 0 || res.y == 0) {
     res = make_int2(1024, 512);
-    VLOG(2) << "Setting World MIS resolution to default\n";
+    VLOG_INFO << "Setting World MIS resolution to default\n";
   }
   kbackground->map_res_x = res.x;
   kbackground->map_res_y = res.y;
@@ -701,7 +707,7 @@ void LightManager::device_update_background(Device *device,
 
   marg_cdf[res.y].y = 1.0f;
 
-  VLOG(2) << "Background MIS build time " << time_dt() - time_start << "\n";
+  VLOG_WORK << "Background MIS build time " << time_dt() - time_start << "\n";
 
   /* update device */
   dscene->light_background_marginal_cdf.copy_to_device();
@@ -722,7 +728,7 @@ void LightManager::device_update_points(Device *, DeviceScene *dscene, Scene *sc
   KernelLight *klights = dscene->lights.alloc(num_lights);
 
   if (num_lights == 0) {
-    VLOG(1) << "No effective light, ignoring points update.";
+    VLOG_WORK << "No effective light, ignoring points update.";
     return;
   }
 
@@ -896,9 +902,18 @@ void LightManager::device_update_points(Device *, DeviceScene *dscene, Scene *sc
 
     klights[light_index].max_bounces = max_bounces;
     klights[light_index].random = random;
+    klights[light_index].use_caustics = light->use_caustics;
 
     klights[light_index].tfm = light->tfm;
     klights[light_index].itfm = transform_inverse(light->tfm);
+
+    auto it = scene->lightgroups.find(light->lightgroup);
+    if (it != scene->lightgroups.end()) {
+      klights[light_index].lightgroup = it->second;
+    }
+    else {
+      klights[light_index].lightgroup = LIGHTGROUP_NONE;
+    }
 
     light_index++;
   }
@@ -943,9 +958,9 @@ void LightManager::device_update_points(Device *, DeviceScene *dscene, Scene *sc
     light_index++;
   }
 
-  VLOG(1) << "Number of lights sent to the device: " << light_index;
+  VLOG_INFO << "Number of lights sent to the device: " << light_index;
 
-  VLOG(1) << "Number of lights without contribution: " << num_scene_lights - light_index;
+  VLOG_INFO << "Number of lights without contribution: " << num_scene_lights - light_index;
 
   dscene->lights.copy_to_device();
 }
@@ -964,7 +979,7 @@ void LightManager::device_update(Device *device,
     }
   });
 
-  VLOG(1) << "Total " << scene->lights.size() << " lights.";
+  VLOG_INFO << "Total " << scene->lights.size() << " lights.";
 
   /* Detect which lights are enabled, also determines if we need to update the background. */
   test_enabled_lights(scene);

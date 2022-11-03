@@ -15,28 +15,24 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Vector>(N_("Normal"));
 }
 
-static void node_shader_buts_bevel(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_shader_buts_bevel(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "samples", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
 }
 
-static void node_shader_init_bevel(bNodeTree *UNUSED(ntree), bNode *node)
+static void node_shader_init_bevel(bNodeTree * /*ntree*/, bNode *node)
 {
   node->custom1 = 4; /* samples */
 }
 
 static int gpu_shader_bevel(GPUMaterial *mat,
                             bNode *node,
-                            bNodeExecData *UNUSED(execdata),
+                            bNodeExecData * /*execdata*/,
                             GPUNodeStack *in,
                             GPUNodeStack *out)
 {
   if (!in[1].link) {
-    GPU_link(mat,
-             "direction_transform_m4v3",
-             GPU_builtin(GPU_VIEW_NORMAL),
-             GPU_builtin(GPU_INVERSE_VIEW_MATRIX),
-             &in[1].link);
+    GPU_link(mat, "world_normals_get", &in[1].link);
   }
 
   return GPU_stack_link(mat, node, "node_bevel", in, out);

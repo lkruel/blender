@@ -6,6 +6,10 @@
 
 #pragma once
 
+#ifdef __cplusplus
+#  include "BLI_map.hh"
+#endif
+
 struct ARegion;
 struct ListBase;
 struct Main;
@@ -88,7 +92,15 @@ struct bNodeSocket *version_node_add_socket_if_not_exist(struct bNodeTree *ntree
  * the flag on all sockets after changes to the node tree.
  */
 void version_socket_update_is_used(bNodeTree *ntree);
+ARegion *do_versions_add_region(int regiontype, const char *name);
 
 #ifdef __cplusplus
 }
+#endif
+
+#ifdef __cplusplus
+void node_tree_relink_with_socket_id_map(bNodeTree &ntree,
+                                         bNode &old_node,
+                                         bNode &new_node,
+                                         const blender::Map<std::string, std::string> &map);
 #endif

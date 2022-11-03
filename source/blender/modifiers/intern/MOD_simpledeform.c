@@ -30,6 +30,7 @@
 #include "UI_resources.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "DEG_depsgraph_query.h"
 
@@ -287,13 +288,13 @@ static void SimpleDeformModifier_do(SimpleDeformModifierData *smd,
                                     struct Object *ob,
                                     struct Mesh *mesh,
                                     float (*vertexCos)[3],
-                                    int numVerts)
+                                    int verts_num)
 {
   int i;
   float smd_limit[2], smd_factor;
   SpaceTransform *transf = NULL, tmp_transf;
   int vgroup;
-  MDeformVert *dvert;
+  const MDeformVert *dvert;
 
   /* This is historically the lock axis, _not_ the deform axis as the name would imply */
   const int deform_axis = smd->deform_axis;
@@ -354,7 +355,7 @@ static void SimpleDeformModifier_do(SimpleDeformModifierData *smd,
     float lower = FLT_MAX;
     float upper = -FLT_MAX;
 
-    for (i = 0; i < numVerts; i++) {
+    for (i = 0; i < verts_num; i++) {
       float tmp[3];
       copy_v3_v3(tmp, vertexCos[i]);
 
@@ -400,7 +401,7 @@ static void SimpleDeformModifier_do(SimpleDeformModifierData *smd,
   /* Do deformation. */
   TaskParallelSettings settings;
   BLI_parallel_range_settings_defaults(&settings);
-  BLI_task_parallel_range(0, numVerts, (void *)&deform_pool_data, simple_helper, &settings);
+  BLI_task_parallel_range(0, verts_num, (void *)&deform_pool_data, simple_helper, &settings);
 }
 
 /* SimpleDeform */
@@ -413,9 +414,7 @@ static void initData(ModifierData *md)
   MEMCPY_STRUCT_AFTER(smd, DNA_struct_default_get(SimpleDeformModifierData), modifier);
 }
 
-static void requiredDataMask(Object *UNUSED(ob),
-                             ModifierData *md,
-                             CustomData_MeshMasks *r_cddata_masks)
+static void requiredDataMask(ModifierData *md, CustomData_MeshMasks *r_cddata_masks)
 {
   SimpleDeformModifierData *smd = (SimpleDeformModifierData *)md;
 
@@ -437,7 +436,7 @@ static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphConte
   if (smd->origin != NULL) {
     DEG_add_object_relation(
         ctx->node, smd->origin, DEG_OB_COMP_TRANSFORM, "SimpleDeform Modifier");
-    DEG_add_modifier_to_transform_relation(ctx->node, "SimpleDeform Modifier");
+    DEG_add_depends_on_transform_relation(ctx->node, "SimpleDeform Modifier");
   }
 }
 
@@ -445,17 +444,17 @@ static void deformVerts(ModifierData *md,
                         const ModifierEvalContext *ctx,
                         struct Mesh *mesh,
                         float (*vertexCos)[3],
-                        int numVerts)
+                        int verts_num)
 {
   SimpleDeformModifierData *sdmd = (SimpleDeformModifierData *)md;
   Mesh *mesh_src = NULL;
 
   if (ctx->object->type == OB_MESH && sdmd->vgroup_name[0] != '\0') {
     /* mesh_src is only needed for vgroups. */
-    mesh_src = MOD_deform_mesh_eval_get(ctx->object, NULL, mesh, NULL, numVerts, false, false);
+    mesh_src = MOD_deform_mesh_eval_get(ctx->object, NULL, mesh, NULL, verts_num, false);
   }
 
-  SimpleDeformModifier_do(sdmd, ctx, ctx->object, mesh_src, vertexCos, numVerts);
+  SimpleDeformModifier_do(sdmd, ctx, ctx->object, mesh_src, vertexCos, verts_num);
 
   if (!ELEM(mesh_src, NULL, mesh)) {
     BKE_id_free(NULL, mesh_src);
@@ -467,22 +466,22 @@ static void deformVertsEM(ModifierData *md,
                           struct BMEditMesh *editData,
                           struct Mesh *mesh,
                           float (*vertexCos)[3],
-                          int numVerts)
+                          int verts_num)
 {
   SimpleDeformModifierData *sdmd = (SimpleDeformModifierData *)md;
   Mesh *mesh_src = NULL;
 
   if (ctx->object->type == OB_MESH && sdmd->vgroup_name[0] != '\0') {
     /* mesh_src is only needed for vgroups. */
-    mesh_src = MOD_deform_mesh_eval_get(ctx->object, editData, mesh, NULL, numVerts, false, false);
+    mesh_src = MOD_deform_mesh_eval_get(ctx->object, editData, mesh, NULL, verts_num, false);
   }
 
-  /* TODO(Campbell): use edit-mode data only (remove this line). */
+  /* TODO(@campbellbarton): use edit-mode data only (remove this line). */
   if (mesh_src != NULL) {
     BKE_mesh_wrapper_ensure_mdata(mesh_src);
   }
 
-  SimpleDeformModifier_do(sdmd, ctx, ctx->object, mesh_src, vertexCos, numVerts);
+  SimpleDeformModifier_do(sdmd, ctx, ctx->object, mesh_src, vertexCos, verts_num);
 
   if (!ELEM(mesh_src, NULL, mesh)) {
     BKE_id_free(NULL, mesh_src);
@@ -562,7 +561,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 ModifierTypeInfo modifierType_SimpleDeform = {
-    /* name */ "SimpleDeform",
+    /* name */ N_("SimpleDeform"),
     /* structName */ "SimpleDeformModifierData",
     /* structSize */ sizeof(SimpleDeformModifierData),
     /* srna */ &RNA_SimpleDeformModifier,

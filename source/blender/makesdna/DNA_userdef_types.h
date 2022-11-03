@@ -9,6 +9,7 @@
 
 #include "DNA_listBase.h"
 #include "DNA_texture_types.h" /* ColorBand */
+#include "DNA_userdef_enums.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -56,7 +57,7 @@ typedef struct uiFontStyle {
   /** Saved in file, 0 is default. */
   short uifont_id;
   char _pad1[2];
-  /** Actual size depends on 'global' dpi. */
+  /** Actual size depends on 'global' DPI. */
   float points;
   /** Style hint. */
   short italic, bold;
@@ -145,6 +146,7 @@ typedef struct ThemeUI {
   uiWidgetColors wcol_num, wcol_numslider, wcol_tab;
   uiWidgetColors wcol_menu, wcol_pulldown, wcol_menu_back, wcol_menu_item, wcol_tooltip;
   uiWidgetColors wcol_box, wcol_scroll, wcol_progress, wcol_list_item, wcol_pie_menu;
+  uiWidgetColors wcol_view_item;
 
   uiWidgetStateColors wcol_state;
 
@@ -313,7 +315,7 @@ typedef struct ThemeSpace {
   char _pad5[3];
   float dash_alpha;
 
-  /* syntax for textwindow and nodes */
+  /* Syntax for text-window and nodes. */
   unsigned char syntaxl[4], syntaxs[4]; /* in nodespace used for backdrop matte */
   unsigned char syntaxb[4], syntaxn[4]; /* in nodespace used for color input */
   unsigned char syntaxv[4], syntaxc[4]; /* in nodespace used for converter group */
@@ -579,7 +581,6 @@ typedef struct bUserAssetLibrary {
 typedef struct SolidLight {
   int flag;
   float smooth;
-  char _pad0[8];
   float col[4], spec[4], vec[4];
 } SolidLight;
 
@@ -636,20 +637,23 @@ typedef struct UserDef_Experimental {
   char use_undo_legacy;
   char no_override_auto_resync;
   char use_cycles_debug;
-  char use_geometry_nodes_legacy;
   char show_asset_debug_info;
   char no_asset_indexing;
+  char use_viewport_debug;
   char SANITIZE_AFTER_HERE;
   /* The following options are automatically sanitized (set to 0)
    * when the release cycle is not alpha. */
-  char use_new_curves_type;
+  char use_new_curves_tools;
   char use_new_point_cloud_type;
   char use_full_frame_compositor;
-  char use_sculpt_vertex_colors;
   char use_sculpt_tools_tilt;
   char use_extended_asset_browser;
   char use_override_templates;
-  char _pad[2];
+  char enable_eevee_next;
+  char use_sculpt_texture_paint;
+  char use_draw_manager_acquire_lock;
+  char use_realtime_compositor;
+  char _pad[7];
   /** `makesdna` does not allow empty structs. */
 } UserDef_Experimental;
 
@@ -855,7 +859,7 @@ typedef struct UserDef {
 
   float glalphaclip;
 
-  /** #eAutokey_Mode, autokeying mode. */
+  /** #eAutokey_Mode, auto-keying mode. */
   short autokey_mode;
   /** Flags for autokeying. */
   short autokey_flag;
@@ -910,8 +914,7 @@ typedef struct UserDef {
   /** Pie menu distance from center before a direction is set. */
   short pie_menu_threshold;
 
-  short opensubdiv_compute_type;
-  short _pad6;
+  short _pad6[2];
 
   char factor_display_type;
 
@@ -1072,7 +1075,7 @@ typedef enum eWalkNavigation_Flag {
 
 /** #UserDef.uiflag */
 typedef enum eUserpref_UI_Flag {
-  USER_UIFLAG_UNUSED_0 = (1 << 0), /* cleared */
+  USER_NO_MULTITOUCH_GESTURES = (1 << 0),
   USER_UIFLAG_UNUSED_1 = (1 << 1), /* cleared */
   USER_WHEELZOOMDIR = (1 << 2),
   USER_FILTERFILEEXTS = (1 << 3),
@@ -1158,7 +1161,7 @@ typedef enum eUserpref_StatusBar_Flag {
  * #UserDef.autokey_mode
  */
 typedef enum eAutokey_Mode {
-  /* AUTOKEY_ON is a bitflag */
+  /* AUTOKEY_ON is a bit-flag. */
   AUTOKEY_ON = 1,
 
   /**
@@ -1219,39 +1222,6 @@ typedef enum eUserpref_Translation_Flags {
   USER_TR_UNUSED_7 = (1 << 7),            /* cleared */
   USER_TR_NEWDATANAME = (1 << 8),
 } eUserpref_Translation_Flags;
-
-/** #UserDef.dupflag */
-typedef enum eDupli_ID_Flags {
-  USER_DUP_MESH = (1 << 0),
-  USER_DUP_CURVE = (1 << 1),
-  USER_DUP_SURF = (1 << 2),
-  USER_DUP_FONT = (1 << 3),
-  USER_DUP_MBALL = (1 << 4),
-  USER_DUP_LAMP = (1 << 5),
-  /* USER_DUP_FCURVE = (1 << 6), */ /* UNUSED, keep because we may implement. */
-  USER_DUP_MAT = (1 << 7),
-  /* USER_DUP_TEX = (1 << 8), */ /* UNUSED, keep because we may implement. */
-  USER_DUP_ARM = (1 << 9),
-  USER_DUP_ACT = (1 << 10),
-  USER_DUP_PSYS = (1 << 11),
-  USER_DUP_LIGHTPROBE = (1 << 12),
-  USER_DUP_GPENCIL = (1 << 13),
-  USER_DUP_CURVES = (1 << 14),
-  USER_DUP_POINTCLOUD = (1 << 15),
-  USER_DUP_VOLUME = (1 << 16),
-  USER_DUP_LATTICE = (1 << 17),
-  USER_DUP_CAMERA = (1 << 18),
-  USER_DUP_SPEAKER = (1 << 19),
-
-  USER_DUP_OBDATA = (~0) & ((1 << 24) - 1),
-
-  /* Those are not exposed as user preferences, only used internally. */
-  USER_DUP_OBJECT = (1 << 24),
-  /* USER_DUP_COLLECTION = (1 << 25), */ /* UNUSED, keep because we may implement. */
-
-  /* Duplicate (and hence make local) linked data. */
-  USER_DUP_LINKED_ID = (1 << 30),
-} eDupli_ID_Flags;
 
 /**
  * Text Editor options
@@ -1350,6 +1320,7 @@ typedef enum eNdof_Flag {
   NDOF_PANY_INVERT_AXIS = (1 << 13),
   NDOF_PANZ_INVERT_AXIS = (1 << 14),
   NDOF_TURNTABLE = (1 << 15),
+  NDOF_CAMERA_PAN_ZOOM = (1 << 16),
 } eNdof_Flag;
 
 #define NDOF_PIXELS_PER_SECOND 600.0f

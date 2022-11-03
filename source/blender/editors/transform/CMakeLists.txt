@@ -15,8 +15,9 @@ set(INC
   ../../render
   ../../sequencer
   ../../windowmanager
-  ../../../../intern/glew-mx
   ../../../../intern/guardedalloc
+  # RNA_prototypes.h
+  ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
 
@@ -37,8 +38,9 @@ set(SRC
   transform_convert_mesh_edge.c
   transform_convert_mesh_skin.c
   transform_convert_mesh_uv.c
+  transform_convert_mesh_vert_cdata.c
   transform_convert_nla.c
-  transform_convert_node.c
+  transform_convert_node.cc
   transform_convert_object.c
   transform_convert_object_texspace.c
   transform_convert_paintcurve.c
@@ -88,7 +90,7 @@ set(SRC
   transform_orientations.c
   transform_snap.c
   transform_snap_animation.c
-  transform_snap_object.c
+  transform_snap_object.cc
   transform_snap_sequencer.c
 
   transform.h
@@ -112,3 +114,6 @@ set(LIB
 
 
 blender_add_lib(bf_editor_transform "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+
+# RNA_prototypes.h
+add_dependencies(bf_editor_transform bf_rna)

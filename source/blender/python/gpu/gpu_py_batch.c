@@ -13,13 +13,9 @@
 
 #include <Python.h>
 
-#include "MEM_guardedalloc.h"
-
 #include "BLI_utildefines.h"
 
 #include "GPU_batch.h"
-
-#include "../mathutils/mathutils.h"
 
 #include "../generic/py_capi_utils.h"
 
@@ -60,7 +56,15 @@ static PyObject *pygpu_batch__tp_new(PyTypeObject *UNUSED(type), PyObject *args,
   BPyGPUIndexBuf *py_indexbuf = NULL;
 
   static const char *_keywords[] = {"type", "buf", "elem", NULL};
-  static _PyArg_Parser _parser = {"|$O&O!O!:GPUBatch.__new__", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "|$" /* Optional keyword only arguments. */
+      "O&" /* `type` */
+      "O!" /* `buf` */
+      "O!" /* `elem` */
+      ":GPUBatch.__new__",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kwds,
                                         &_parser,
@@ -74,6 +78,18 @@ static PyObject *pygpu_batch__tp_new(PyTypeObject *UNUSED(type), PyObject *args,
   }
 
   BLI_assert(prim_type.value_found != GPU_PRIM_NONE);
+  if (prim_type.value_found == GPU_PRIM_LINE_LOOP) {
+    PyErr_WarnEx(PyExc_DeprecationWarning,
+                 "'LINE_LOOP' is deprecated. Please use 'LINE_STRIP' and close the segment.",
+                 1);
+  }
+  else if (prim_type.value_found == GPU_PRIM_TRI_FAN) {
+    PyErr_WarnEx(
+        PyExc_DeprecationWarning,
+        "'TRI_FAN' is deprecated. Please use 'TRI_STRIP' or 'TRIS' and try modifying your "
+        "vertices or indices to match the topology.",
+        1);
+  }
 
   if (py_vertbuf == NULL) {
     PyErr_Format(PyExc_TypeError, exc_str_missing_arg, _keywords[1], 2);
@@ -95,6 +111,7 @@ static PyObject *pygpu_batch__tp_new(PyTypeObject *UNUSED(type), PyObject *args,
     Py_INCREF(py_indexbuf);
   }
 
+  BLI_assert(!PyObject_GC_IsTracked((PyObject *)ret));
   PyObject_GC_Track(ret);
 #endif
 
@@ -111,7 +128,7 @@ PyDoc_STRVAR(pygpu_batch_vertbuf_add_doc,
 "   vertex buffer for vertex positions and vertex normals.\n"
 "   Current a batch can have at most " STRINGIFY(GPU_BATCH_VBO_MAX_LEN) " vertex buffers.\n"
 "\n"
-"   :param buf: The vertex buffer that will be added to the batch.\n"
+"   :arg buf: The vertex buffer that will be added to the batch.\n"
 "   :type buf: :class:`gpu.types.GPUVertBuf`\n"
 );
 static PyObject *pygpu_batch_vertbuf_add(BPyGPUBatch *self, BPyGPUVertBuf *py_buf)
@@ -155,7 +172,7 @@ PyDoc_STRVAR(
     "   This function does not need to be called when you always\n"
     "   set the shader when calling :meth:`gpu.types.GPUBatch.draw`.\n"
     "\n"
-    "   :param program: The program/shader the batch will use in future draw calls.\n"
+    "   :arg program: The program/shader the batch will use in future draw calls.\n"
     "   :type program: :class:`gpu.types.GPUShader`\n");
 static PyObject *pygpu_batch_program_set(BPyGPUBatch *self, BPyGPUShader *py_shader)
 {
@@ -193,7 +210,7 @@ PyDoc_STRVAR(pygpu_batch_draw_doc,
              "\n"
              "   Run the drawing program with the parameters assigned to the batch.\n"
              "\n"
-             "   :param program: Program that performs the drawing operations.\n"
+             "   :arg program: Program that performs the drawing operations.\n"
              "      If ``None`` is passed, the last program set to this batch will run.\n"
              "   :type program: :class:`gpu.types.GPUShader`\n");
 static PyObject *pygpu_batch_draw(BPyGPUBatch *self, PyObject *args)
@@ -257,6 +274,11 @@ static int pygpu_batch__tp_clear(BPyGPUBatch *self)
   return 0;
 }
 
+static int pygpu_batch__tp_is_gc(BPyGPUBatch *self)
+{
+  return self->references != NULL;
+}
+
 #endif
 
 static void pygpu_batch__tp_dealloc(BPyGPUBatch *self)
@@ -297,6 +319,7 @@ PyTypeObject BPyGPUBatch_Type = {
     .tp_doc = pygpu_batch__tp_doc,
     .tp_traverse = (traverseproc)pygpu_batch__tp_traverse,
     .tp_clear = (inquiry)pygpu_batch__tp_clear,
+    .tp_is_gc = (inquiry)pygpu_batch__tp_is_gc,
 #else
     .tp_flags = Py_TPFLAGS_DEFAULT,
 #endif

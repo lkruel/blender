@@ -5,6 +5,7 @@ set(INC
   ../../blenfont
   ../../blenkernel
   ../../blenlib
+  ../../blenloader
   ../../blentranslation
   ../../depsgraph
   ../../draw
@@ -15,14 +16,21 @@ set(INC
   ../../sequencer
   ../../windowmanager
   ../../../../intern/atomic
-  ../../../../intern/glew-mx
   ../../../../intern/guardedalloc
+
+  # dna_type_offsets.h
+  ${CMAKE_CURRENT_BINARY_DIR}/../../makesdna/intern
+  # RNA_prototypes.h
+  ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
 
 set(SRC
   sequencer_add.c
   sequencer_buttons.c
+  sequencer_channels_draw.c
+  sequencer_channels_edit.c
+  sequencer_drag_drop.c
   sequencer_draw.c
   sequencer_edit.c
   sequencer_modifier.c
@@ -57,3 +65,6 @@ endif()
 
 
 blender_add_lib(bf_editor_space_sequencer "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+
+# RNA_prototypes.h dna_type_offsets.h
+add_dependencies(bf_editor_space_sequencer bf_rna)

@@ -94,6 +94,9 @@ static const char *object_mode_op_string(eObjectMode mode)
   if (mode == OB_MODE_VERTEX_GPENCIL) {
     return "GPENCIL_OT_vertexmode_toggle";
   }
+  if (mode == OB_MODE_SCULPT_CURVES) {
+    return "CURVES_OT_sculptmode_toggle";
+  }
   return NULL;
 }
 
@@ -115,7 +118,7 @@ bool ED_object_mode_compat_test(const Object *ob, eObjectMode mode)
         }
       }
       break;
-    case OB_CURVE:
+    case OB_CURVES_LEGACY:
     case OB_SURF:
     case OB_FONT:
     case OB_MBALL:
@@ -139,6 +142,16 @@ bool ED_object_mode_compat_test(const Object *ob, eObjectMode mode)
         return true;
       }
       break;
+    case OB_CURVES:
+      if (U.experimental.use_new_curves_tools) {
+        if (mode & OB_MODE_EDIT) {
+          return true;
+        }
+      }
+      if (mode & OB_MODE_SCULPT_CURVES) {
+        return true;
+      }
+      break;
   }
 
   return false;
@@ -150,7 +163,7 @@ bool ED_object_mode_compat_set(bContext *C, Object *ob, eObjectMode mode, Report
   if (!ELEM(ob->mode, mode, OB_MODE_OBJECT)) {
     const char *opstring = object_mode_op_string(ob->mode);
 
-    WM_operator_name_call(C, opstring, WM_OP_EXEC_REGION_WIN, NULL);
+    WM_operator_name_call(C, opstring, WM_OP_EXEC_REGION_WIN, NULL, NULL);
     ok = ELEM(ob->mode, mode, OB_MODE_OBJECT);
     if (!ok) {
       wmOperatorType *ot = WM_operatortype_find(opstring, false);
@@ -177,8 +190,11 @@ bool ED_object_mode_compat_set(bContext *C, Object *ob, eObjectMode mode, Report
 bool ED_object_mode_set_ex(bContext *C, eObjectMode mode, bool use_undo, ReportList *reports)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Object *ob = OBACT(view_layer);
+
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  Object *ob = BKE_view_layer_active_object_get(view_layer);
   if (ob == NULL) {
     return (mode == OB_MODE_OBJECT);
   }
@@ -201,7 +217,7 @@ bool ED_object_mode_set_ex(bContext *C, eObjectMode mode, bool use_undo, ReportL
   if (!use_undo) {
     wm->op_undo_depth++;
   }
-  WM_operator_name_call_ptr(C, ot, WM_OP_EXEC_REGION_WIN, NULL);
+  WM_operator_name_call_ptr(C, ot, WM_OP_EXEC_REGION_WIN, NULL, NULL);
   if (!use_undo) {
     wm->op_undo_depth--;
   }
@@ -314,9 +330,11 @@ static void ed_object_posemode_set_for_weight_paint_ex(bContext *C,
                                                        const bool is_mode_set)
 {
   View3D *v3d = CTX_wm_view3d(C);
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
   if (ob_arm != NULL) {
+    BKE_view_layer_synced_ensure(scene, view_layer);
     const Base *base_arm = BKE_view_layer_base_find(view_layer, ob_arm);
     if (base_arm && BASE_VISIBLE(v3d, base_arm)) {
       if (is_mode_set) {
@@ -445,14 +463,15 @@ static bool object_transfer_mode_to_base(bContext *C, wmOperator *op, Base *base
     return false;
   }
 
-  bool mode_transfered = false;
+  bool mode_transferred = false;
 
   ED_undo_group_begin(C);
 
   if (ED_object_mode_set_ex(C, OB_MODE_OBJECT, true, op->reports)) {
     Object *ob_dst_orig = DEG_get_original_object(ob_dst);
+    BKE_view_layer_synced_ensure(scene, view_layer);
     Base *base = BKE_view_layer_base_find(view_layer, ob_dst_orig);
-    BKE_view_layer_base_deselect_all(view_layer);
+    BKE_view_layer_base_deselect_all(scene, view_layer);
     BKE_view_layer_base_select_and_set_active(view_layer, base);
     DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
 
@@ -467,11 +486,11 @@ static bool object_transfer_mode_to_base(bContext *C, wmOperator *op, Base *base
 
     WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
     WM_toolsystem_update_from_context_view3d(C);
-    mode_transfered = true;
+    mode_transferred = true;
   }
 
   ED_undo_group_end(C);
-  return mode_transfered;
+  return mode_transferred;
 }
 
 static int object_transfer_mode_invoke(bContext *C, wmOperator *op, const wmEvent *event)
@@ -480,8 +499,8 @@ static int object_transfer_mode_invoke(bContext *C, wmOperator *op, const wmEven
   const eObjectMode src_mode = (eObjectMode)ob_src->mode;
 
   Base *base_dst = ED_view3d_give_base_under_cursor(C, event->mval);
-  const bool mode_transfered = object_transfer_mode_to_base(C, op, base_dst);
-  if (!mode_transfered) {
+  const bool mode_transferred = object_transfer_mode_to_base(C, op, base_dst);
+  if (!mode_transferred) {
     return OPERATOR_CANCELLED;
   }
 

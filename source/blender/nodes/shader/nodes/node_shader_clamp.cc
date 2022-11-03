@@ -21,19 +21,19 @@ static void sh_node_clamp_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Float>(N_("Result"));
 }
 
-static void node_shader_buts_clamp(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_shader_buts_clamp(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "clamp_type", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
 }
 
-static void node_shader_init_clamp(bNodeTree *UNUSED(ntree), bNode *node)
+static void node_shader_init_clamp(bNodeTree * /*ntree*/, bNode *node)
 {
   node->custom1 = NODE_CLAMP_MINMAX; /* clamp type */
 }
 
 static int gpu_shader_clamp(GPUMaterial *mat,
                             bNode *node,
-                            bNodeExecData *UNUSED(execdata),
+                            bNodeExecData * /*execdata*/,
                             GPUNodeStack *in,
                             GPUNodeStack *out)
 {
@@ -42,12 +42,12 @@ static int gpu_shader_clamp(GPUMaterial *mat,
              GPU_stack_link(mat, node, "clamp_range", in, out);
 }
 
-static void sh_node_clamp_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &builder)
+static void sh_node_clamp_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
-  static blender::fn::CustomMF_SI_SI_SI_SO<float, float, float, float> minmax_fn{
+  static fn::CustomMF_SI_SI_SI_SO<float, float, float, float> minmax_fn{
       "Clamp (Min Max)",
       [](float value, float min, float max) { return std::min(std::max(value, min), max); }};
-  static blender::fn::CustomMF_SI_SI_SI_SO<float, float, float, float> range_fn{
+  static fn::CustomMF_SI_SI_SI_SO<float, float, float, float> range_fn{
       "Clamp (Range)", [](float value, float a, float b) {
         if (a < b) {
           return clamp_f(value, a, b);

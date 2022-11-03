@@ -12,6 +12,7 @@ try:
 except ImportError:
     np = None
 
+
 class TestHelper:
 
     @property
@@ -21,7 +22,7 @@ class TestHelper:
     def setUp(self):
         self._id = bpy.context.scene
         self._id.pop("cycles", None)
-        assert(len(self._id.keys()) == 0)
+        assert len(self._id.keys()) == 0
 
     def tearDown(self):
         for key in list(self._id.keys()):
@@ -171,6 +172,13 @@ class TestIdPropertyGroupView(TestHelper, unittest.TestCase):
         self.assertEqual(len(self.id.items()), len(text))
         self.assertEqual(list(self.id.items()), [(k, v) for v, k in enumerate(text)])
         self.assertEqual(list(reversed(self.id.items())), list(reversed([(k, v) for v, k in enumerate(text)])))
+
+        # Check direct iteration is working as expected.
+        self.id["group"] = {ch: i for i, ch in enumerate(text)}
+        group = self.id["group"]
+
+        self.assertEqual(len(group), len(text))
+        self.assertEqual(list(iter(group)), text)
 
     def test_contains(self):
         # Check `idprop.types.IDPropertyGroupView{Keys/Values/Items}.__contains__`

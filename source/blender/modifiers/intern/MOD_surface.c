@@ -28,6 +28,7 @@
 #include "UI_resources.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_query.h"
@@ -82,9 +83,7 @@ static void freeData(ModifierData *md)
   }
 }
 
-static bool dependsOnTime(struct Scene *UNUSED(scene),
-                          ModifierData *UNUSED(md),
-                          const int UNUSED(dag_eval_mode))
+static bool dependsOnTime(struct Scene *UNUSED(scene), ModifierData *UNUSED(md))
 {
   return true;
 }
@@ -93,7 +92,7 @@ static void deformVerts(ModifierData *md,
                         const ModifierEvalContext *ctx,
                         Mesh *mesh,
                         float (*vertexCos)[3],
-                        int numVerts)
+                        int verts_num)
 {
   SurfaceModifierData *surmd = (SurfaceModifierData *)md;
   const int cfra = (int)DEG_get_ctime(ctx->depsgraph);
@@ -115,7 +114,7 @@ static void deformVerts(ModifierData *md,
     surmd->mesh = (Mesh *)BKE_id_copy_ex(NULL, (ID *)mesh, NULL, LIB_ID_COPY_LOCALIZE);
   }
   else {
-    surmd->mesh = MOD_deform_mesh_eval_get(ctx->object, NULL, NULL, NULL, numVerts, false, false);
+    surmd->mesh = MOD_deform_mesh_eval_get(ctx->object, NULL, NULL, NULL, verts_num, false);
   }
 
   if (!ctx->object->pd) {
@@ -124,17 +123,15 @@ static void deformVerts(ModifierData *md,
   }
 
   if (surmd->mesh) {
-    uint numverts = 0, i = 0;
+    uint mesh_verts_num = 0, i = 0;
     int init = 0;
-    float *vec;
     MVert *x, *v;
 
     BKE_mesh_vert_coords_apply(surmd->mesh, vertexCos);
-    BKE_mesh_calc_normals(surmd->mesh);
 
-    numverts = surmd->mesh->totvert;
+    mesh_verts_num = surmd->mesh->totvert;
 
-    if (numverts != surmd->numverts || surmd->x == NULL || surmd->v == NULL ||
+    if (mesh_verts_num != surmd->verts_num || surmd->x == NULL || surmd->v == NULL ||
         cfra != surmd->cfra + 1) {
       if (surmd->x) {
         MEM_freeN(surmd->x);
@@ -145,18 +142,19 @@ static void deformVerts(ModifierData *md,
         surmd->v = NULL;
       }
 
-      surmd->x = MEM_calloc_arrayN(numverts, sizeof(MVert), "MVert");
-      surmd->v = MEM_calloc_arrayN(numverts, sizeof(MVert), "MVert");
+      surmd->x = MEM_calloc_arrayN(mesh_verts_num, sizeof(MVert), "MVert");
+      surmd->v = MEM_calloc_arrayN(mesh_verts_num, sizeof(MVert), "MVert");
 
-      surmd->numverts = numverts;
+      surmd->verts_num = mesh_verts_num;
 
       init = 1;
     }
 
     /* convert to global coordinates and calculate velocity */
-    for (i = 0, x = surmd->x, v = surmd->v; i < numverts; i++, x++, v++) {
-      vec = surmd->mesh->mvert[i].co;
-      mul_m4_v3(ctx->object->obmat, vec);
+    MVert *verts = BKE_mesh_verts_for_write(surmd->mesh);
+    for (i = 0, x = surmd->x, v = surmd->v; i < mesh_verts_num; i++, x++, v++) {
+      float *vec = verts[i].co;
+      mul_m4_v3(ctx->object->object_to_world, vec);
 
       if (init) {
         v->co[0] = v->co[1] = v->co[2] = 0.0f;
@@ -209,11 +207,11 @@ static void blendRead(BlendDataReader *UNUSED(reader), ModifierData *md)
   surmd->bvhtree = NULL;
   surmd->x = NULL;
   surmd->v = NULL;
-  surmd->numverts = 0;
+  surmd->verts_num = 0;
 }
 
 ModifierTypeInfo modifierType_Surface = {
-    /* name */ "Surface",
+    /* name */ N_("Surface"),
     /* structName */ "SurfaceModifierData",
     /* structSize */ sizeof(SurfaceModifierData),
     /* srna */ &RNA_SurfaceModifier,

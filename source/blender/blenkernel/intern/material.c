@@ -43,6 +43,7 @@
 #include "BLT_translation.h"
 
 #include "BKE_anim_data.h"
+#include "BKE_attribute.h"
 #include "BKE_brush.h"
 #include "BKE_curve.h"
 #include "BKE_displist.h"
@@ -101,6 +102,7 @@ static void material_copy_data(Main *bmain, ID *id_dst, const ID *id_src, const 
                      (ID **)&material_dst->nodetree,
                      flag_private_id_data);
     }
+    material_dst->nodetree->owner_id = &material_dst->id;
   }
 
   if ((flag & LIB_ID_COPY_NO_PREVIEW) == 0) {
@@ -254,7 +256,7 @@ IDTypeInfo IDType_ID_MA = {
     .foreach_id = material_foreach_id,
     .foreach_cache = NULL,
     .foreach_path = NULL,
-    .owner_get = NULL,
+    .owner_pointer_get = NULL,
 
     .blend_write = material_blend_write,
     .blend_read_data = material_blend_read_data,
@@ -313,7 +315,7 @@ Material ***BKE_object_material_array_p(Object *ob)
     Mesh *me = ob->data;
     return &(me->mat);
   }
-  if (ELEM(ob->type, OB_CURVE, OB_FONT, OB_SURF)) {
+  if (ELEM(ob->type, OB_CURVES_LEGACY, OB_FONT, OB_SURF)) {
     Curve *cu = ob->data;
     return &(cu->mat);
   }
@@ -346,7 +348,7 @@ short *BKE_object_material_len_p(Object *ob)
     Mesh *me = ob->data;
     return &(me->totcol);
   }
-  if (ELEM(ob->type, OB_CURVE, OB_FONT, OB_SURF)) {
+  if (ELEM(ob->type, OB_CURVES_LEGACY, OB_FONT, OB_SURF)) {
     Curve *cu = ob->data;
     return &(cu->totcol);
   }
@@ -381,7 +383,7 @@ Material ***BKE_id_material_array_p(ID *id)
   switch (GS(id->name)) {
     case ID_ME:
       return &(((Mesh *)id)->mat);
-    case ID_CU:
+    case ID_CU_LEGACY:
       return &(((Curve *)id)->mat);
     case ID_MB:
       return &(((MetaBall *)id)->mat);
@@ -407,7 +409,7 @@ short *BKE_id_material_len_p(ID *id)
   switch (GS(id->name)) {
     case ID_ME:
       return &(((Mesh *)id)->totcol);
-    case ID_CU:
+    case ID_CU_LEGACY:
       return &(((Curve *)id)->totcol);
     case ID_MB:
       return &(((MetaBall *)id)->totcol);
@@ -434,7 +436,7 @@ static void material_data_index_remove_id(ID *id, short index)
     case ID_ME:
       BKE_mesh_material_index_remove((Mesh *)id, index);
       break;
-    case ID_CU:
+    case ID_CU_LEGACY:
       BKE_curve_material_index_remove((Curve *)id, index);
       break;
     case ID_MB:
@@ -468,7 +470,7 @@ bool BKE_object_material_slot_used(Object *object, short actcol)
   switch (GS(ob_data->name)) {
     case ID_ME:
       return BKE_mesh_material_index_used((Mesh *)ob_data, actcol - 1);
-    case ID_CU:
+    case ID_CU_LEGACY:
       return BKE_curve_material_index_used((Curve *)ob_data, actcol - 1);
     case ID_MB:
       /* Meta-elements don't support materials at the moment. */
@@ -489,7 +491,7 @@ static void material_data_index_clear_id(ID *id)
     case ID_ME:
       BKE_mesh_material_index_clear((Mesh *)id);
       break;
-    case ID_CU:
+    case ID_CU_LEGACY:
       BKE_curve_material_index_clear((Curve *)id);
       break;
     case ID_MB:
@@ -851,7 +853,7 @@ void BKE_object_material_resize(Main *bmain, Object *ob, const short totcol, boo
     ob->mat = newmatar;
     ob->matbits = newmatbits;
   }
-  /* XXX(campbell): why not realloc on shrink? */
+  /* XXX(@campbellbarton): why not realloc on shrink? */
 
   ob->totcol = totcol;
   if (ob->totcol && ob->actcol == 0) {
@@ -898,9 +900,15 @@ void BKE_objects_materials_test_all(Main *bmain, ID *id)
   }
 
   BKE_main_lock(bmain);
+  int processed_objects = 0;
   for (ob = bmain->objects.first; ob; ob = ob->id.next) {
     if (ob->data == id) {
       BKE_object_material_resize(bmain, ob, *totcol, false);
+      processed_objects++;
+      BLI_assert(processed_objects <= id->us && processed_objects > 0);
+      if (processed_objects == id->us) {
+        break;
+      }
     }
   }
   BKE_main_unlock(bmain);
@@ -953,7 +961,8 @@ void BKE_id_material_assign(Main *bmain, ID *id, Material *ma, short act)
   BKE_objects_materials_test_all(bmain, id);
 }
 
-void BKE_object_material_assign(Main *bmain, Object *ob, Material *ma, short act, int assign_type)
+static void object_material_assign(
+    Main *bmain, Object *ob, Material *ma, short act, int assign_type, bool do_test_all)
 {
   Material *mao, **matar, ***matarar;
   short *totcolp;
@@ -1036,7 +1045,10 @@ void BKE_object_material_assign(Main *bmain, Object *ob, Material *ma, short act
       id_us_min(&mao->id);
     }
     (*matarar)[act - 1] = ma;
-    BKE_objects_materials_test_all(bmain, ob->data); /* Data may be used by several objects... */
+    /* Data may be used by several objects. */
+    if (do_test_all) {
+      BKE_objects_materials_test_all(bmain, ob->data);
+    }
   }
 
   if (ma) {
@@ -1044,7 +1056,20 @@ void BKE_object_material_assign(Main *bmain, Object *ob, Material *ma, short act
   }
 }
 
-void BKE_object_material_remap(Object *ob, const unsigned int *remap)
+void BKE_object_material_assign(Main *bmain, Object *ob, Material *ma, short act, int assign_type)
+{
+  object_material_assign(bmain, ob, ma, act, assign_type, true);
+}
+
+void BKE_object_material_assign_single_obdata(struct Main *bmain,
+                                              struct Object *ob,
+                                              struct Material *ma,
+                                              short act)
+{
+  object_material_assign(bmain, ob, ma, act, BKE_MAT_ASSIGN_OBDATA, false);
+}
+
+void BKE_object_material_remap(Object *ob, const uint *remap)
 {
   Material ***matar = BKE_object_material_array_p(ob);
   const short *totcol_p = BKE_object_material_len_p(ob);
@@ -1062,7 +1087,7 @@ void BKE_object_material_remap(Object *ob, const unsigned int *remap)
   if (ob->type == OB_MESH) {
     BKE_mesh_material_remap(ob->data, remap, ob->totcol);
   }
-  else if (ELEM(ob->type, OB_CURVE, OB_SURF, OB_FONT)) {
+  else if (ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF, OB_FONT)) {
     BKE_curve_material_remap(ob->data, remap, ob->totcol);
   }
   else if (ob->type == OB_GPENCIL) {
@@ -1122,15 +1147,16 @@ void BKE_object_material_remap_calc(Object *ob_dst, Object *ob_src, short *remap
   BLI_ghash_free(gh_mat_map, NULL, NULL);
 }
 
-void BKE_object_material_from_eval_data(Main *bmain, Object *ob_orig, ID *data_eval)
+void BKE_object_material_from_eval_data(Main *bmain, Object *ob_orig, const ID *data_eval)
 {
   ID *data_orig = ob_orig->data;
 
   short *orig_totcol = BKE_id_material_len_p(data_orig);
   Material ***orig_mat = BKE_id_material_array_p(data_orig);
 
-  short *eval_totcol = BKE_id_material_len_p(data_eval);
-  Material ***eval_mat = BKE_id_material_array_p(data_eval);
+  /* Can cast away const, because the data is not changed. */
+  const short *eval_totcol = BKE_id_material_len_p((ID *)data_eval);
+  Material ***eval_mat = BKE_id_material_array_p((ID *)data_eval);
 
   if (ELEM(NULL, orig_totcol, orig_mat, eval_totcol, eval_mat)) {
     return;
@@ -1243,7 +1269,6 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
   /* this should never happen and used to crash */
   if (ob->actcol <= 0) {
     CLOG_ERROR(&LOG, "invalid material index %d, report a bug!", ob->actcol);
-    BLI_assert(0);
     return false;
   }
 
@@ -1314,7 +1339,7 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
   }
 
   /* check indices from mesh */
-  if (ELEM(ob->type, OB_MESH, OB_CURVE, OB_SURF, OB_FONT)) {
+  if (ELEM(ob->type, OB_MESH, OB_CURVES_LEGACY, OB_SURF, OB_FONT)) {
     material_data_index_remove_id((ID *)ob->data, actcol - 1);
     if (ob->runtime.curve_cache) {
       BKE_displist_free(&ob->runtime.curve_cache->disp);
@@ -1347,21 +1372,36 @@ static bNode *nodetree_uv_node_recursive(bNode *node)
   return NULL;
 }
 
+/** Bitwise filter for updating paint slots. */
+typedef enum ePaintSlotFilter {
+  PAINT_SLOT_IMAGE = 1 << 0,
+  PAINT_SLOT_COLOR_ATTRIBUTE = 1 << 1,
+} ePaintSlotFilter;
+
 typedef bool (*ForEachTexNodeCallback)(bNode *node, void *userdata);
 static bool ntree_foreach_texnode_recursive(bNodeTree *nodetree,
                                             ForEachTexNodeCallback callback,
-                                            void *userdata)
+                                            void *userdata,
+                                            ePaintSlotFilter slot_filter)
 {
+  const bool do_image_nodes = (slot_filter & PAINT_SLOT_IMAGE) != 0;
+  const bool do_color_attributes = (slot_filter & PAINT_SLOT_COLOR_ATTRIBUTE) != 0;
   LISTBASE_FOREACH (bNode *, node, &nodetree->nodes) {
-    if (node->typeinfo->nclass == NODE_CLASS_TEXTURE &&
+    if (do_image_nodes && node->typeinfo->nclass == NODE_CLASS_TEXTURE &&
         node->typeinfo->type == SH_NODE_TEX_IMAGE && node->id) {
+      if (!callback(node, userdata)) {
+        return false;
+      }
+    }
+    if (do_color_attributes && node->typeinfo->type == SH_NODE_ATTRIBUTE) {
       if (!callback(node, userdata)) {
         return false;
       }
     }
     else if (ELEM(node->type, NODE_GROUP, NODE_CUSTOM_GROUP) && node->id) {
       /* recurse into the node group and see if it contains any textures */
-      if (!ntree_foreach_texnode_recursive((bNodeTree *)node->id, callback, userdata)) {
+      if (!ntree_foreach_texnode_recursive(
+              (bNodeTree *)node->id, callback, userdata, slot_filter)) {
         return false;
       }
     }
@@ -1375,16 +1415,17 @@ static bool count_texture_nodes_cb(bNode *UNUSED(node), void *userdata)
   return true;
 }
 
-static int count_texture_nodes_recursive(bNodeTree *nodetree)
+static int count_texture_nodes_recursive(bNodeTree *nodetree, ePaintSlotFilter slot_filter)
 {
   int tex_nodes = 0;
-  ntree_foreach_texnode_recursive(nodetree, count_texture_nodes_cb, &tex_nodes);
+  ntree_foreach_texnode_recursive(nodetree, count_texture_nodes_cb, &tex_nodes, slot_filter);
 
   return tex_nodes;
 }
 
 struct FillTexPaintSlotsData {
   bNode *active_node;
+  const Object *ob;
   Material *ma;
   int index;
   int slot_len;
@@ -1402,21 +1443,47 @@ static bool fill_texpaint_slots_cb(bNode *node, void *userdata)
     ma->paint_active_slot = index;
   }
 
-  ma->texpaintslot[index].ima = (Image *)node->id;
-  ma->texpaintslot[index].interp = ((NodeTexImage *)node->storage)->interpolation;
+  switch (node->type) {
+    case SH_NODE_TEX_IMAGE: {
+      TexPaintSlot *slot = &ma->texpaintslot[index];
+      slot->ima = (Image *)node->id;
+      NodeTexImage *storage = (NodeTexImage *)node->storage;
+      slot->interp = storage->interpolation;
+      slot->image_user = &storage->iuser;
+      /* For new renderer, we need to traverse the tree back in search of a UV node. */
+      bNode *uvnode = nodetree_uv_node_recursive(node);
 
-  /* for new renderer, we need to traverse the treeback in search of a UV node */
-  bNode *uvnode = nodetree_uv_node_recursive(node);
+      if (uvnode) {
+        NodeShaderUVMap *uv_storage = (NodeShaderUVMap *)uvnode->storage;
+        slot->uvname = uv_storage->uv_map;
+        /* set a value to index so UI knows that we have a valid pointer for the mesh */
+        slot->valid = true;
+      }
+      else {
+        /* just invalidate the index here so UV map does not get displayed on the UI */
+        slot->valid = false;
+      }
+      break;
+    }
 
-  if (uvnode) {
-    NodeShaderUVMap *storage = (NodeShaderUVMap *)uvnode->storage;
-    ma->texpaintslot[index].uvname = storage->uv_map;
-    /* set a value to index so UI knows that we have a valid pointer for the mesh */
-    ma->texpaintslot[index].valid = true;
-  }
-  else {
-    /* just invalidate the index here so UV map does not get displayed on the UI */
-    ma->texpaintslot[index].valid = false;
+    case SH_NODE_ATTRIBUTE: {
+      TexPaintSlot *slot = &ma->texpaintslot[index];
+      NodeShaderAttribute *storage = node->storage;
+      slot->attribute_name = storage->name;
+      if (storage->type == SHD_ATTRIBUTE_GEOMETRY) {
+        const Mesh *mesh = (const Mesh *)fill_data->ob->data;
+        const CustomDataLayer *layer = BKE_id_attributes_color_find(&mesh->id, storage->name);
+        slot->valid = layer != NULL;
+      }
+
+      /* Do not show unsupported attributes. */
+      if (!slot->valid) {
+        slot->attribute_name = NULL;
+        fill_data->index--;
+      }
+
+      break;
+    }
   }
 
   return fill_data->index != fill_data->slot_len;
@@ -1424,87 +1491,118 @@ static bool fill_texpaint_slots_cb(bNode *node, void *userdata)
 
 static void fill_texpaint_slots_recursive(bNodeTree *nodetree,
                                           bNode *active_node,
+                                          const Object *ob,
                                           Material *ma,
-                                          int slot_len)
+                                          int slot_len,
+                                          ePaintSlotFilter slot_filter)
 {
-  struct FillTexPaintSlotsData fill_data = {active_node, ma, 0, slot_len};
-  ntree_foreach_texnode_recursive(nodetree, fill_texpaint_slots_cb, &fill_data);
+  struct FillTexPaintSlotsData fill_data = {active_node, ob, ma, 0, slot_len};
+  ntree_foreach_texnode_recursive(nodetree, fill_texpaint_slots_cb, &fill_data, slot_filter);
 }
 
-void BKE_texpaint_slot_refresh_cache(Scene *scene, Material *ma)
+/** Check which type of paint slots should be filled for the given object. */
+static ePaintSlotFilter material_paint_slot_filter(const struct Object *ob)
 {
-  int count = 0;
+  ePaintSlotFilter slot_filter = PAINT_SLOT_IMAGE;
+  if (ob->mode == OB_MODE_SCULPT && U.experimental.use_sculpt_texture_paint) {
+    slot_filter |= PAINT_SLOT_COLOR_ATTRIBUTE;
+  }
+  return slot_filter;
+}
 
+void BKE_texpaint_slot_refresh_cache(Scene *scene, Material *ma, const struct Object *ob)
+{
   if (!ma) {
     return;
   }
 
-  /* COW needed when adding texture slot on an object with no materials. */
-  DEG_id_tag_update(&ma->id, ID_RECALC_SHADING | ID_RECALC_COPY_ON_WRITE);
+  const ePaintSlotFilter slot_filter = material_paint_slot_filter(ob);
 
-  if (ma->texpaintslot) {
-    MEM_freeN(ma->texpaintslot);
-    ma->tot_slots = 0;
-    ma->texpaintslot = NULL;
-  }
+  const TexPaintSlot *prev_texpaintslot = ma->texpaintslot;
+  const int prev_paint_active_slot = ma->paint_active_slot;
+  const int prev_paint_clone_slot = ma->paint_clone_slot;
+  const int prev_tot_slots = ma->tot_slots;
+
+  ma->texpaintslot = NULL;
+  ma->tot_slots = 0;
 
   if (scene->toolsettings->imapaint.mode == IMAGEPAINT_MODE_IMAGE) {
     ma->paint_active_slot = 0;
     ma->paint_clone_slot = 0;
-    return;
   }
-
-  if (!(ma->nodetree)) {
+  else if (!(ma->nodetree)) {
     ma->paint_active_slot = 0;
     ma->paint_clone_slot = 0;
-    return;
+  }
+  else {
+    int count = count_texture_nodes_recursive(ma->nodetree, slot_filter);
+
+    if (count == 0) {
+      ma->paint_active_slot = 0;
+      ma->paint_clone_slot = 0;
+    }
+    else {
+      ma->texpaintslot = MEM_callocN(sizeof(*ma->texpaintslot) * count, "texpaint_slots");
+
+      bNode *active_node = nodeGetActivePaintCanvas(ma->nodetree);
+
+      fill_texpaint_slots_recursive(ma->nodetree, active_node, ob, ma, count, slot_filter);
+
+      ma->tot_slots = count;
+
+      if (ma->paint_active_slot >= count) {
+        ma->paint_active_slot = count - 1;
+      }
+
+      if (ma->paint_clone_slot >= count) {
+        ma->paint_clone_slot = count - 1;
+      }
+    }
   }
 
-  count = count_texture_nodes_recursive(ma->nodetree);
-
-  if (count == 0) {
-    ma->paint_active_slot = 0;
-    ma->paint_clone_slot = 0;
-    return;
+  /* COW needed when adding texture slot on an object with no materials.
+   * But do it only when slots actually change to avoid continuous depsgraph updates. */
+  if (ma->tot_slots != prev_tot_slots || ma->paint_active_slot != prev_paint_active_slot ||
+      ma->paint_clone_slot != prev_paint_clone_slot ||
+      (ma->texpaintslot && prev_texpaintslot &&
+       memcmp(ma->texpaintslot, prev_texpaintslot, sizeof(*ma->texpaintslot) * ma->tot_slots) !=
+           0)) {
+    DEG_id_tag_update(&ma->id, ID_RECALC_SHADING | ID_RECALC_COPY_ON_WRITE);
   }
 
-  ma->texpaintslot = MEM_callocN(sizeof(*ma->texpaintslot) * count, "texpaint_slots");
-
-  bNode *active_node = nodeGetActiveTexture(ma->nodetree);
-
-  fill_texpaint_slots_recursive(ma->nodetree, active_node, ma, count);
-
-  ma->tot_slots = count;
-
-  if (ma->paint_active_slot >= count) {
-    ma->paint_active_slot = count - 1;
-  }
-
-  if (ma->paint_clone_slot >= count) {
-    ma->paint_clone_slot = count - 1;
-  }
+  MEM_SAFE_FREE(prev_texpaintslot);
 }
 
 void BKE_texpaint_slots_refresh_object(Scene *scene, struct Object *ob)
 {
   for (int i = 1; i < ob->totcol + 1; i++) {
     Material *ma = BKE_object_material_get(ob, i);
-    BKE_texpaint_slot_refresh_cache(scene, ma);
+    BKE_texpaint_slot_refresh_cache(scene, ma, ob);
   }
 }
 
 struct FindTexPaintNodeData {
-  Image *ima;
+  TexPaintSlot *slot;
   bNode *r_node;
 };
 
 static bool texpaint_slot_node_find_cb(bNode *node, void *userdata)
 {
   struct FindTexPaintNodeData *find_data = userdata;
-  Image *ima = (Image *)node->id;
-  if (find_data->ima == ima) {
-    find_data->r_node = node;
-    return false;
+  if (find_data->slot->ima && node->type == SH_NODE_TEX_IMAGE) {
+    Image *node_ima = (Image *)node->id;
+    if (find_data->slot->ima == node_ima) {
+      find_data->r_node = node;
+      return false;
+    }
+  }
+
+  if (find_data->slot->attribute_name && node->type == SH_NODE_ATTRIBUTE) {
+    NodeShaderAttribute *storage = node->storage;
+    if (STREQLEN(find_data->slot->attribute_name, storage->name, sizeof(storage->name))) {
+      find_data->r_node = node;
+      return false;
+    }
   }
 
   return true;
@@ -1512,8 +1610,12 @@ static bool texpaint_slot_node_find_cb(bNode *node, void *userdata)
 
 bNode *BKE_texpaint_slot_material_find_node(Material *ma, short texpaint_slot)
 {
-  struct FindTexPaintNodeData find_data = {ma->texpaintslot[texpaint_slot].ima, NULL};
-  ntree_foreach_texnode_recursive(ma->nodetree, texpaint_slot_node_find_cb, &find_data);
+  TexPaintSlot *slot = &ma->texpaintslot[texpaint_slot];
+  struct FindTexPaintNodeData find_data = {slot, NULL};
+  ntree_foreach_texnode_recursive(ma->nodetree,
+                                  texpaint_slot_node_find_cb,
+                                  &find_data,
+                                  PAINT_SLOT_IMAGE | PAINT_SLOT_COLOR_ATTRIBUTE);
 
   return find_data.r_node;
 }
@@ -1872,8 +1974,10 @@ static void material_default_gpencil_init(Material *ma)
 
 static void material_default_surface_init(Material *ma)
 {
-  bNodeTree *ntree = ntreeAddTree(NULL, "Shader Nodetree", ntreeType_Shader->idname);
-  ma->nodetree = ntree;
+  strcpy(ma->id.name, "MADefault Surface");
+
+  bNodeTree *ntree = ntreeAddTreeEmbedded(
+      NULL, &ma->id, "Shader Nodetree", ntreeType_Shader->idname);
   ma->use_nodes = true;
 
   bNode *principled = nodeAddStaticNode(NULL, ntree, SH_NODE_BSDF_PRINCIPLED);
@@ -1898,8 +2002,10 @@ static void material_default_surface_init(Material *ma)
 
 static void material_default_volume_init(Material *ma)
 {
-  bNodeTree *ntree = ntreeAddTree(NULL, "Shader Nodetree", ntreeType_Shader->idname);
-  ma->nodetree = ntree;
+  strcpy(ma->id.name, "MADefault Volume");
+
+  bNodeTree *ntree = ntreeAddTreeEmbedded(
+      NULL, &ma->id, "Shader Nodetree", ntreeType_Shader->idname);
   ma->use_nodes = true;
 
   bNode *principled = nodeAddStaticNode(NULL, ntree, SH_NODE_VOLUME_PRINCIPLED);
@@ -1921,8 +2027,10 @@ static void material_default_volume_init(Material *ma)
 
 static void material_default_holdout_init(Material *ma)
 {
-  bNodeTree *ntree = ntreeAddTree(NULL, "Shader Nodetree", ntreeType_Shader->idname);
-  ma->nodetree = ntree;
+  strcpy(ma->id.name, "MADefault Holdout");
+
+  bNodeTree *ntree = ntreeAddTreeEmbedded(
+      NULL, &ma->id, "Shader Nodetree", ntreeType_Shader->idname);
   ma->use_nodes = true;
 
   bNode *holdout = nodeAddStaticNode(NULL, ntree, SH_NODE_HOLDOUT);

@@ -3,13 +3,9 @@
 
 set(INC
   ..
-  ../../glew-mx
 )
 
-set(INC_SYS
-  ${GLEW_INCLUDE_DIR}
-  ../../../extern/clew/include
-)
+set(INC_SYS )
 
 if(WITH_CYCLES_DEVICE_OPTIX OR WITH_CYCLES_DEVICE_CUDA)
   if(WITH_CUDA_DYNLOAD)
@@ -23,6 +19,8 @@ if(WITH_CYCLES_DEVICE_OPTIX OR WITH_CYCLES_DEVICE_CUDA)
     )
     add_definitions(-DCYCLES_CUDA_NVCC_EXECUTABLE="${CUDA_NVCC_EXECUTABLE}")
   endif()
+
+  add_definitions(-DCYCLES_RUNTIME_OPTIX_ROOT_DIR="${CYCLES_RUNTIME_OPTIX_ROOT_DIR}")
 endif()
 
 if(WITH_CYCLES_DEVICE_HIP AND WITH_HIP_DYNLOAD)
@@ -83,6 +81,15 @@ set(SRC_HIP
   hip/util.h
 )
 
+set(SRC_ONEAPI
+  oneapi/device_impl.cpp
+  oneapi/device_impl.h
+  oneapi/device.cpp
+  oneapi/device.h
+  oneapi/queue.cpp
+  oneapi/queue.h
+)
+
 set(SRC_DUMMY
   dummy/device.cpp
   dummy/device.h
@@ -141,7 +148,6 @@ set(SRC
 set(LIB
   cycles_kernel
   cycles_util
-  ${CYCLES_GL_LIBRARIES}
 )
 
 if(WITH_CYCLES_DEVICE_OPTIX OR WITH_CYCLES_DEVICE_CUDA)
@@ -162,8 +168,6 @@ if(WITH_CYCLES_DEVICE_HIP AND WITH_HIP_DYNLOAD)
   )
 endif()
 
-add_definitions(${GL_DEFINITIONS})
-
 if(WITH_CYCLES_DEVICE_CUDA)
   add_definitions(-DWITH_CUDA)
 endif()
@@ -182,6 +186,31 @@ if(WITH_CYCLES_DEVICE_METAL)
     ${SRC_METAL}
   )
 endif()
+if (WITH_CYCLES_DEVICE_ONEAPI)
+  if(WITH_CYCLES_ONEAPI_BINARIES)
+    set(cycles_kernel_oneapi_lib_suffix "_aot")
+  else()
+    set(cycles_kernel_oneapi_lib_suffix "_jit")
+  endif()
+  if(WIN32)
+    set(cycles_kernel_oneapi_lib ${CMAKE_CURRENT_BINARY_DIR}/../kernel/cycles_kernel_oneapi${cycles_kernel_oneapi_lib_suffix}.lib)
+  else()
+    set(cycles_kernel_oneapi_lib ${CMAKE_CURRENT_BINARY_DIR}/../kernel/libcycles_kernel_oneapi${cycles_kernel_oneapi_lib_suffix}.so)
+  endif()
+  list(APPEND LIB ${cycles_kernel_oneapi_lib})
+  if(WIN32)
+    list(APPEND LIB debug ${SYCL_LIBRARY_DEBUG} optimized ${SYCL_LIBRARY})
+  else()
+    list(APPEND LIB ${SYCL_LIBRARY})
+  endif()
+  add_definitions(-DWITH_ONEAPI)
+  list(APPEND SRC
+    ${SRC_ONEAPI}
+  )
+  list(APPEND INC_SYS
+    ${SYCL_INCLUDE_DIR}
+  )
+endif()
 
 if(WITH_OPENIMAGEDENOISE)
   list(APPEND LIB
@@ -194,10 +223,17 @@ include_directories(SYSTEM ${INC_SYS})
 
 cycles_add_library(cycles_device "${LIB}" ${SRC})
 
+if(WITH_CYCLES_DEVICE_ONEAPI)
+  # Need to have proper rebuilding in case of changes in cycles_kernel_oneapi due external project behaviour
+  add_dependencies(cycles_device cycles_kernel_oneapi)
+endif()
+
 source_group("cpu" FILES ${SRC_CPU})
 source_group("cuda" FILES ${SRC_CUDA})
 source_group("dummy" FILES ${SRC_DUMMY})
+source_group("hip" FILES ${SRC_HIP})
 source_group("multi" FILES ${SRC_MULTI})
 source_group("metal" FILES ${SRC_METAL})
 source_group("optix" FILES ${SRC_OPTIX})
-source_group("common" FILES ${SRC} ${SRC_HEADERS})
+source_group("oneapi" FILES ${SRC_ONEAPI})
+source_group("common" FILES ${SRC_BASE} ${SRC_HEADERS})

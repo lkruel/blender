@@ -61,7 +61,7 @@ static bool pygpu_buffer_pyobj_as_shape(PyObject *shape_obj,
   Py_ssize_t shape_len = 0;
   if (PyLong_Check(shape_obj)) {
     shape_len = 1;
-    if (((r_shape[0] = PyLong_AsLong(shape_obj)) < 1)) {
+    if ((r_shape[0] = PyLong_AsLong(shape_obj)) < 1) {
       PyErr_SetString(PyExc_AttributeError, "dimension must be greater than or equal to 1");
       return false;
     }
@@ -100,7 +100,7 @@ static bool pygpu_buffer_pyobj_as_shape(PyObject *shape_obj,
   }
   else {
     PyErr_Format(PyExc_TypeError,
-                 "invalid second argument argument expected a sequence "
+                 "invalid second argument expected a sequence "
                  "or an int, not a %.200s",
                  Py_TYPE(shape_obj)->tp_name);
   }
@@ -153,6 +153,7 @@ static BPyGPUBuffer *pygpu_buffer_make_from_data(PyObject *parent,
   if (parent) {
     Py_INCREF(parent);
     buffer->parent = parent;
+    BLI_assert(!PyObject_GC_IsTracked((PyObject *)buffer));
     PyObject_GC_Track(buffer);
   }
   return buffer;
@@ -277,7 +278,10 @@ static int pygpu_buffer__tp_traverse(BPyGPUBuffer *self, visitproc visit, void *
 
 static int pygpu_buffer__tp_clear(BPyGPUBuffer *self)
 {
-  Py_CLEAR(self->parent);
+  if (self->parent) {
+    Py_CLEAR(self->parent);
+    self->buf.as_void = NULL;
+  }
   return 0;
 }
 
@@ -287,7 +291,7 @@ static void pygpu_buffer__tp_dealloc(BPyGPUBuffer *self)
     PyObject_GC_UnTrack(self);
     Py_CLEAR(self->parent);
   }
-  else {
+  else if (self->buf.as_void) {
     MEM_freeN(self->buf.as_void);
   }
 
@@ -394,9 +398,16 @@ static PyObject *pygpu_buffer__tp_new(PyTypeObject *UNUSED(type), PyObject *args
       return NULL;
     }
 
-    if (pygpu_buffer_dimensions_tot_len_compare(shape, shape_len, pybuffer.shape, pybuffer.ndim)) {
+    Py_ssize_t *pybuffer_shape = pybuffer.shape;
+    Py_ssize_t pybuffer_ndim = pybuffer.ndim;
+    if (!pybuffer_shape) {
+      pybuffer_shape = &pybuffer.len;
+      pybuffer_ndim = 1;
+    }
+
+    if (pygpu_buffer_dimensions_tot_len_compare(shape, shape_len, pybuffer_shape, pybuffer_ndim)) {
       buffer = pygpu_buffer_make_from_data(
-          init, pygpu_dataformat.value_found, pybuffer.ndim, shape, pybuffer.buf);
+          init, pygpu_dataformat.value_found, shape_len, shape, pybuffer.buf);
     }
 
     PyBuffer_Release(&pybuffer);
@@ -410,6 +421,11 @@ static PyObject *pygpu_buffer__tp_new(PyTypeObject *UNUSED(type), PyObject *args
   }
 
   return (PyObject *)buffer;
+}
+
+static int pygpu_buffer__tp_is_gc(BPyGPUBuffer *self)
+{
+  return self->parent != NULL;
 }
 
 /* BPyGPUBuffer sequence methods */
@@ -594,23 +610,31 @@ static void pygpu_buffer_strides_calc(const eGPUDataFormat format,
 }
 
 /* Here is the buffer interface function */
-static int pygpu_buffer__bf_getbuffer(BPyGPUBuffer *self, Py_buffer *view, int UNUSED(flags))
+static int pygpu_buffer__bf_getbuffer(BPyGPUBuffer *self, Py_buffer *view, int flags)
 {
   if (view == NULL) {
     PyErr_SetString(PyExc_ValueError, "NULL view in getbuffer");
     return -1;
   }
 
+  memset(view, 0, sizeof(*view));
+
   view->obj = (PyObject *)self;
   view->buf = (void *)self->buf.as_void;
   view->len = bpygpu_Buffer_size(self);
   view->readonly = 0;
   view->itemsize = GPU_texture_dataformat_size(self->format);
-  view->format = (char *)pygpu_buffer_formatstr(self->format);
-  view->ndim = self->shape_len;
-  view->shape = self->shape;
-  view->strides = MEM_mallocN(view->ndim * sizeof(*view->strides), "BPyGPUBuffer strides");
-  pygpu_buffer_strides_calc(self->format, view->ndim, view->shape, view->strides);
+  if (flags & PyBUF_FORMAT) {
+    view->format = (char *)pygpu_buffer_formatstr(self->format);
+  }
+  if (flags & PyBUF_ND) {
+    view->ndim = self->shape_len;
+    view->shape = self->shape;
+  }
+  if (flags & PyBUF_STRIDES) {
+    view->strides = MEM_mallocN(view->ndim * sizeof(*view->strides), "BPyGPUBuffer strides");
+    pygpu_buffer_strides_calc(self->format, view->ndim, view->shape, view->strides);
+  }
   view->suboffsets = NULL;
   view->internal = NULL;
 
@@ -637,7 +661,7 @@ PyDoc_STRVAR(
     "\n"
     "   :arg format: Format type to interpret the buffer.\n"
     "      Possible values are `FLOAT`, `INT`, `UINT`, `UBYTE`, `UINT_24_8` and `10_11_11_REV`.\n"
-    "   :type type: str\n"
+    "   :type format: str\n"
     "   :arg dimensions: Array describing the dimensions.\n"
     "   :type dimensions: int\n"
     "   :arg data: Optional data array.\n"
@@ -659,6 +683,7 @@ PyTypeObject BPyGPU_BufferType = {
     .tp_methods = pygpu_buffer__tp_methods,
     .tp_getset = pygpu_buffer_getseters,
     .tp_new = pygpu_buffer__tp_new,
+    .tp_is_gc = (inquiry)pygpu_buffer__tp_is_gc,
 };
 
 static size_t pygpu_buffer_calc_size(const int format,

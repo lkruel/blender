@@ -29,8 +29,6 @@ struct TextureInfo {
 
   /** \brief area of the texture in screen space. */
   rctf clipping_bounds;
-  /** \brief uv area of the texture (copy from ARegion). */
-  rctf region_uv_bounds;
   /** \brief uv area of the texture in screen space. */
   rctf clipping_uv_bounds;
 
@@ -47,6 +45,8 @@ struct TextureInfo {
    * \brief GPU Texture for a partial region of the image editor.
    */
   GPUTexture *texture;
+
+  float2 last_viewport_size = float2(0.0f, 0.0f);
 
   ~TextureInfo()
   {

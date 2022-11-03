@@ -237,7 +237,7 @@ TEST(span, SizeInBytes)
 {
   std::array<int, 10> a{};
   Span<int> a_span(a);
-  EXPECT_EQ(a_span.size_in_bytes(), static_cast<int64_t>(sizeof(a)));
+  EXPECT_EQ(a_span.size_in_bytes(), int64_t(sizeof(a)));
   EXPECT_EQ(a_span.size_in_bytes(), 40);
 }
 
@@ -247,6 +247,8 @@ TEST(span, FirstLast)
   Span<int> a_span(a);
   EXPECT_EQ(a_span.first(), 6);
   EXPECT_EQ(a_span.last(), 9);
+  EXPECT_EQ(a_span.last(1), 8);
+  EXPECT_EQ(a_span.last(2), 7);
 }
 
 TEST(span, FirstLast_OneElement)
@@ -255,6 +257,7 @@ TEST(span, FirstLast_OneElement)
   Span<int> a_span(&a, 1);
   EXPECT_EQ(a_span.first(), 3);
   EXPECT_EQ(a_span.last(), 3);
+  EXPECT_EQ(a_span.last(0), 3);
 }
 
 TEST(span, Get)
@@ -277,7 +280,7 @@ TEST(span, ContainsPtr)
   EXPECT_TRUE(a_span.contains_ptr(&a[0] + 1));
   EXPECT_TRUE(a_span.contains_ptr(&a[0] + 2));
   EXPECT_FALSE(a_span.contains_ptr(&a[0] + 3));
-  int *ptr_before = reinterpret_cast<int *>(reinterpret_cast<uintptr_t>(a.data()) - 1);
+  int *ptr_before = reinterpret_cast<int *>(uintptr_t(a.data()) - 1);
   EXPECT_FALSE(a_span.contains_ptr(ptr_before));
   EXPECT_FALSE(a_span.contains_ptr(&other));
 }

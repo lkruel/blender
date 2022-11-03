@@ -14,6 +14,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BKE_context.h"
+#include "BKE_gpencil.h"
 #include "BKE_lib_id.h"
 #include "BKE_lib_remap.h"
 #include "BKE_node.h"
@@ -27,9 +28,12 @@
 #include "UI_resources.h"
 #include "UI_view2d.h"
 
+#include "BLO_read_write.h"
+
 #include "RNA_access.h"
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
+#include "RNA_prototypes.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -215,7 +219,7 @@ float2 space_node_group_offset(const SpaceNode &snode)
 
 /* ******************** default callbacks for node space ***************** */
 
-static SpaceLink *node_create(const ScrArea *UNUSED(area), const Scene *UNUSED(scene))
+static SpaceLink *node_create(const ScrArea * /*area*/, const Scene * /*scene*/)
 {
   SpaceNode *snode = MEM_cnew<SpaceNode>("initnode");
   snode->spacetype = SPACE_NODE;
@@ -296,12 +300,12 @@ static void node_free(SpaceLink *sl)
 
   if (snode->runtime) {
     snode->runtime->linkdrag.reset();
-    MEM_freeN(snode->runtime);
+    MEM_delete(snode->runtime);
   }
 }
 
 /* spacetype; init callback */
-static void node_init(struct wmWindowManager *UNUSED(wm), ScrArea *area)
+static void node_init(wmWindowManager * /*wm*/, ScrArea *area)
 {
   SpaceNode *snode = (SpaceNode *)area->spacedata.first;
 
@@ -323,10 +327,45 @@ static bool any_node_uses_id(const bNodeTree *ntree, const ID *id)
   return false;
 }
 
+/**
+ * Tag the space to recalculate the compositing tree using auto-compositing pipeline.
+ *
+ * Will check the space to be using a compositing tree, and check whether auto-compositing
+ * is enabled. If the checks do not pass then the function has no affect.
+ */
+static void node_area_tag_recalc_auto_compositing(SpaceNode *snode, ScrArea *area)
+{
+  if (!ED_node_is_compositor(snode)) {
+    return;
+  }
+
+  if (snode->flag & SNODE_AUTO_RENDER) {
+    snode->runtime->recalc_auto_compositing = true;
+    ED_area_tag_refresh(area);
+  }
+}
+
+/**
+ * Tag the space to recalculate the current tree.
+ *
+ * For all node trees this will do `snode_set_context()` which takes care of setting an active
+ * tree. This will be done in the area refresh callback.
+ *
+ * For compositor tree this will additionally start of the compositor job.
+ */
+static void node_area_tag_tree_recalc(SpaceNode *snode, ScrArea *area)
+{
+  if (ED_node_is_compositor(snode)) {
+    snode->runtime->recalc_regular_compositing = true;
+  }
+
+  ED_area_tag_refresh(area);
+}
+
 static void node_area_listener(const wmSpaceTypeListenerParams *params)
 {
   ScrArea *area = params->area;
-  wmNotifier *wmn = params->notifier;
+  const wmNotifier *wmn = params->notifier;
 
   /* NOTE: #ED_area_tag_refresh will re-execute compositor. */
   SpaceNode *snode = (SpaceNode *)area->spacedata.first;
@@ -345,25 +384,20 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
             UI_view2d_center_set(&region->v2d, path->view_center[0], path->view_center[1]);
           }
 
-          ED_area_tag_refresh(area);
+          node_area_tag_tree_recalc(snode, area);
           break;
         }
         case ND_FRAME:
-          ED_area_tag_refresh(area);
+          node_area_tag_tree_recalc(snode, area);
           break;
         case ND_COMPO_RESULT:
           ED_area_tag_redraw(area);
           break;
         case ND_TRANSFORM_DONE:
-          if (ED_node_is_compositor(snode)) {
-            if (snode->flag & SNODE_AUTO_RENDER) {
-              snode->runtime->recalc = true;
-              ED_area_tag_refresh(area);
-            }
-          }
+          node_area_tag_recalc_auto_compositing(snode, area);
           break;
         case ND_LAYER_CONTENT:
-          ED_area_tag_refresh(area);
+          node_area_tag_tree_recalc(snode, area);
           break;
       }
       break;
@@ -372,46 +406,46 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
     case NC_MATERIAL:
       if (ED_node_is_shader(snode)) {
         if (wmn->data == ND_SHADING) {
-          ED_area_tag_refresh(area);
+          node_area_tag_tree_recalc(snode, area);
         }
         else if (wmn->data == ND_SHADING_DRAW) {
-          ED_area_tag_refresh(area);
+          node_area_tag_tree_recalc(snode, area);
         }
         else if (wmn->data == ND_SHADING_LINKS) {
-          ED_area_tag_refresh(area);
+          node_area_tag_tree_recalc(snode, area);
         }
       }
       break;
     case NC_TEXTURE:
       if (ED_node_is_shader(snode) || ED_node_is_texture(snode)) {
         if (wmn->data == ND_NODES) {
-          ED_area_tag_refresh(area);
+          node_area_tag_tree_recalc(snode, area);
         }
       }
       break;
     case NC_WORLD:
       if (ED_node_is_shader(snode) && shader_type == SNODE_SHADER_WORLD) {
-        ED_area_tag_refresh(area);
+        node_area_tag_tree_recalc(snode, area);
       }
       break;
     case NC_OBJECT:
       if (ED_node_is_shader(snode)) {
         if (wmn->data == ND_OB_SHADING) {
-          ED_area_tag_refresh(area);
+          node_area_tag_tree_recalc(snode, area);
         }
       }
       else if (ED_node_is_geometry(snode)) {
         /* Rather strict check: only redraw when the reference matches the current editor's ID. */
         if (wmn->data == ND_MODIFIER) {
           if (wmn->reference == snode->id || snode->id == nullptr) {
-            ED_area_tag_refresh(area);
+            node_area_tag_tree_recalc(snode, area);
           }
         }
       }
       break;
     case NC_SPACE:
       if (wmn->data == ND_SPACE_NODE) {
-        ED_area_tag_refresh(area);
+        node_area_tag_tree_recalc(snode, area);
       }
       else if (wmn->data == ND_SPACE_NODE_VIEW) {
         ED_area_tag_redraw(area);
@@ -419,7 +453,7 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
       break;
     case NC_NODE:
       if (wmn->action == NA_EDITED) {
-        ED_area_tag_refresh(area);
+        node_area_tag_tree_recalc(snode, area);
       }
       else if (wmn->action == NA_SELECTED) {
         ED_area_tag_redraw(area);
@@ -428,14 +462,14 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
     case NC_SCREEN:
       switch (wmn->data) {
         case ND_ANIMPLAY:
-          ED_area_tag_refresh(area);
+          node_area_tag_tree_recalc(snode, area);
           break;
       }
       break;
     case NC_MASK:
       if (wmn->action == NA_EDITED) {
         if (snode->nodetree && snode->nodetree->type == NTREE_COMPOSIT) {
-          ED_area_tag_refresh(area);
+          node_area_tag_tree_recalc(snode, area);
         }
       }
       break;
@@ -446,7 +480,7 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
           /* Without this check drawing on an image could become very slow when the compositor is
            * open. */
           if (any_node_uses_id(snode->nodetree, (ID *)wmn->reference)) {
-            ED_area_tag_refresh(area);
+            node_area_tag_tree_recalc(snode, area);
           }
         }
       }
@@ -456,7 +490,7 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
       if (wmn->action == NA_EDITED) {
         if (ED_node_is_compositor(snode)) {
           if (any_node_uses_id(snode->nodetree, (ID *)wmn->reference)) {
-            ED_area_tag_refresh(area);
+            node_area_tag_tree_recalc(snode, area);
           }
         }
       }
@@ -464,12 +498,12 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
 
     case NC_LINESTYLE:
       if (ED_node_is_shader(snode) && shader_type == SNODE_SHADER_LINESTYLE) {
-        ED_area_tag_refresh(area);
+        node_area_tag_tree_recalc(snode, area);
       }
       break;
     case NC_WM:
       if (wmn->data == ND_UNDO) {
-        ED_area_tag_refresh(area);
+        node_area_tag_tree_recalc(snode, area);
       }
       break;
     case NC_GPENCIL:
@@ -480,7 +514,7 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
   }
 }
 
-static void node_area_refresh(const struct bContext *C, ScrArea *area)
+static void node_area_refresh(const bContext *C, ScrArea *area)
 {
   /* default now: refresh node is starting preview */
   SpaceNode *snode = (SpaceNode *)area->spacedata.first;
@@ -492,11 +526,13 @@ static void node_area_refresh(const struct bContext *C, ScrArea *area)
       Scene *scene = (Scene *)snode->id;
       if (scene->use_nodes) {
         /* recalc is set on 3d view changes for auto compo */
-        if (snode->runtime->recalc) {
-          snode->runtime->recalc = false;
-          node_render_changed_exec((struct bContext *)C, nullptr);
+        if (snode->runtime->recalc_auto_compositing) {
+          snode->runtime->recalc_auto_compositing = false;
+          snode->runtime->recalc_regular_compositing = false;
+          node_render_changed_exec((bContext *)C, nullptr);
         }
-        else {
+        else if (snode->runtime->recalc_regular_compositing) {
+          snode->runtime->recalc_regular_compositing = false;
           ED_node_composite_job(C, snode->nodetree, scene);
         }
       }
@@ -604,62 +640,55 @@ static void node_main_region_draw(const bContext *C, ARegion *region)
 
 /* ************* dropboxes ************* */
 
-static bool node_group_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
+static bool node_group_drop_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
   return WM_drag_is_ID_type(drag, ID_NT);
 }
 
-static bool node_object_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
+static bool node_object_drop_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
   return WM_drag_is_ID_type(drag, ID_OB);
 }
 
-static bool node_collection_drop_poll(bContext *UNUSED(C),
-                                      wmDrag *drag,
-                                      const wmEvent *UNUSED(event))
+static bool node_collection_drop_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
   return WM_drag_is_ID_type(drag, ID_GR);
 }
 
-static bool node_texture_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
-{
-  return WM_drag_is_ID_type(drag, ID_TE);
-}
-
-static bool node_ima_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
+static bool node_ima_drop_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
   if (drag->type == WM_DRAG_PATH) {
     /* rule might not work? */
-    return (ELEM(drag->icon, 0, ICON_FILE_IMAGE, ICON_FILE_MOVIE));
+    return ELEM(drag->icon, 0, ICON_FILE_IMAGE, ICON_FILE_MOVIE);
   }
   return WM_drag_is_ID_type(drag, ID_IM);
 }
 
-static bool node_mask_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
+static bool node_mask_drop_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
   return WM_drag_is_ID_type(drag, ID_MSK);
 }
 
-static void node_group_drop_copy(wmDrag *drag, wmDropBox *drop)
+static void node_group_drop_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
 
-  RNA_string_set(drop->ptr, "name", id->name + 2);
+  RNA_int_set(drop->ptr, "session_uuid", int(id->session_uuid));
 }
 
-static void node_id_drop_copy(wmDrag *drag, wmDropBox *drop)
+static void node_id_drop_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
 
-  RNA_int_set(drop->ptr, "session_uuid", (int)id->session_uuid);
+  RNA_int_set(drop->ptr, "session_uuid", int(id->session_uuid));
 }
 
-static void node_id_path_drop_copy(wmDrag *drag, wmDropBox *drop)
+static void node_id_path_drop_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
 
   if (id) {
-    RNA_string_set(drop->ptr, "name", id->name + 2);
+    RNA_int_set(drop->ptr, "session_uuid", int(id->session_uuid));
     RNA_struct_property_unset(drop->ptr, "filepath");
   }
   else if (drag->path[0]) {
@@ -686,12 +715,6 @@ static void node_dropboxes()
                  WM_drag_free_imported_drag_ID,
                  nullptr);
   WM_dropbox_add(lb,
-                 "NODE_OT_add_texture",
-                 node_texture_drop_poll,
-                 node_id_drop_copy,
-                 WM_drag_free_imported_drag_ID,
-                 nullptr);
-  WM_dropbox_add(lb,
                  "NODE_OT_add_group",
                  node_group_drop_poll,
                  node_group_drop_copy,
@@ -714,7 +737,7 @@ static void node_dropboxes()
 /* ************* end drop *********** */
 
 /* add handlers, stuff you only do once or on area/region changes */
-static void node_header_region_init(wmWindowManager *UNUSED(wm), ARegion *region)
+static void node_header_region_init(wmWindowManager * /*wm*/, ARegion *region)
 {
   ED_region_header_init(region);
 }
@@ -731,7 +754,7 @@ static void node_header_region_draw(const bContext *C, ARegion *region)
 static void node_region_listener(const wmRegionListenerParams *params)
 {
   ARegion *region = params->region;
-  wmNotifier *wmn = params->notifier;
+  const wmNotifier *wmn = params->notifier;
   wmGizmoMap *gzmap = region->gizmo_map;
 
   /* context changes */
@@ -798,14 +821,19 @@ static void node_region_listener(const wmRegionListenerParams *params)
         ED_region_tag_redraw(region);
       }
       break;
+    case NC_VIEWER_PATH:
+      ED_region_tag_redraw(region);
+      break;
   }
 }
 
 }  // namespace blender::ed::space_node
 
 /* Outside of blender namespace to avoid Python documentation build error with `ctypes`. */
+extern "C" {
 const char *node_context_dir[] = {
     "selected_nodes", "active_node", "light", "material", "world", nullptr};
+};
 
 namespace blender::ed::space_node {
 
@@ -949,9 +977,7 @@ static void node_id_remap_cb(ID *old_id, ID *new_id, void *user_data)
   }
 }
 
-static void node_id_remap(ScrArea *UNUSED(area),
-                          SpaceLink *slink,
-                          const struct IDRemapper *mappings)
+static void node_id_remap(ScrArea * /*area*/, SpaceLink *slink, const IDRemapper *mappings)
 {
   /* Although we should be able to perform all the mappings in a single go this lead to issues when
    * running the python test cases. Somehow the nodetree/edittree weren't updated to the new
@@ -989,6 +1015,81 @@ static void node_space_subtype_item_extend(bContext *C, EnumPropertyItem **item,
   }
 }
 
+static void node_blend_read_data(BlendDataReader *reader, SpaceLink *sl)
+{
+  SpaceNode *snode = (SpaceNode *)sl;
+
+  if (snode->gpd) {
+    BLO_read_data_address(reader, &snode->gpd);
+    BKE_gpencil_blend_read_data(reader, snode->gpd);
+  }
+
+  BLO_read_list(reader, &snode->treepath);
+  snode->edittree = nullptr;
+  snode->runtime = nullptr;
+}
+
+static void node_blend_read_lib(BlendLibReader *reader, ID *parent_id, SpaceLink *sl)
+{
+  SpaceNode *snode = (SpaceNode *)sl;
+
+  /* node tree can be stored locally in id too, link this first */
+  BLO_read_id_address(reader, parent_id->lib, &snode->id);
+  BLO_read_id_address(reader, parent_id->lib, &snode->from);
+
+  bNodeTree *ntree = snode->id ? ntreeFromID(snode->id) : nullptr;
+  if (ntree) {
+    snode->nodetree = ntree;
+  }
+  else {
+    BLO_read_id_address(reader, parent_id->lib, &snode->nodetree);
+  }
+
+  bNodeTreePath *path;
+  for (path = static_cast<bNodeTreePath *>(snode->treepath.first); path; path = path->next) {
+    if (path == snode->treepath.first) {
+      /* first nodetree in path is same as snode->nodetree */
+      path->nodetree = snode->nodetree;
+    }
+    else {
+      BLO_read_id_address(reader, parent_id->lib, &path->nodetree);
+    }
+
+    if (!path->nodetree) {
+      break;
+    }
+  }
+
+  /* remaining path entries are invalid, remove */
+  bNodeTreePath *path_next;
+  for (; path; path = path_next) {
+    path_next = path->next;
+
+    BLI_remlink(&snode->treepath, path);
+    MEM_freeN(path);
+  }
+
+  /* edittree is just the last in the path,
+   * set this directly since the path may have been shortened above */
+  if (snode->treepath.last) {
+    path = static_cast<bNodeTreePath *>(snode->treepath.last);
+    snode->edittree = path->nodetree;
+  }
+  else {
+    snode->edittree = nullptr;
+  }
+}
+
+static void node_blend_write(BlendWriter *writer, SpaceLink *sl)
+{
+  SpaceNode *snode = (SpaceNode *)sl;
+  BLO_write_struct(writer, SpaceNode, snode);
+
+  LISTBASE_FOREACH (bNodeTreePath *, path, &snode->treepath) {
+    BLO_write_struct(writer, bNodeTreePath, path);
+  }
+}
+
 }  // namespace blender::ed::space_node
 
 void ED_spacetype_node()
@@ -999,7 +1100,7 @@ void ED_spacetype_node()
   ARegionType *art;
 
   st->spaceid = SPACE_NODE;
-  strncpy(st->name, "Node", BKE_ST_MAXNAME);
+  STRNCPY(st->name, "Node");
 
   st->create = node_create;
   st->free = node_free;
@@ -1016,6 +1117,9 @@ void ED_spacetype_node()
   st->space_subtype_item_extend = node_space_subtype_item_extend;
   st->space_subtype_get = node_space_subtype_get;
   st->space_subtype_set = node_space_subtype_set;
+  st->blend_read_data = node_blend_read_data;
+  st->blend_read_lib = node_blend_read_lib;
+  st->blend_write = node_blend_write;
 
   /* regions: main window */
   art = MEM_cnew<ARegionType>("spacetype node region");
@@ -1065,6 +1169,9 @@ void ED_spacetype_node()
   art->init = node_toolbar_region_init;
   art->draw = node_toolbar_region_draw;
   BLI_addhead(&st->regiontypes, art);
+
+  WM_menutype_add(MEM_new<MenuType>(__func__, add_catalog_assets_menu_type()));
+  WM_menutype_add(MEM_new<MenuType>(__func__, add_root_catalogs_menu_type()));
 
   BKE_spacetype_register(st);
 }
