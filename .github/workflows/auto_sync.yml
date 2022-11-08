@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: tgymnich/fork-sync@v1.5
         with:
-          owner: lkruel
+          owner: blender
           token: ${{ secrets.PERSONAL_TOKEN }}
           auto_approve: true
           #base: master
