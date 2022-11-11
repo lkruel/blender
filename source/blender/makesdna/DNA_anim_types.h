@@ -734,6 +734,13 @@ typedef struct NlaStrip {
 
   /** The number of times to repeat the action range (only when no F-Curves). */
   float repeat;
+
+  /** The mode of how to to repeat the action range, same as the cycle modifier (only when no
+   * F-Curves). */
+  short repeatmode;
+  
+  char _pad1[2];
+
   /** The amount the action range is scaled by (only when no F-Curves). */
   float scale;
 
@@ -744,8 +751,9 @@ typedef struct NlaStrip {
 
   /** Strip extrapolation mode (time-based mixing). */
   short extendmode;
-  char _pad1[2];
+  char _pad2[6];
 
+ 
   /** Type of NLA strip. */
   short type;
 
@@ -754,13 +762,10 @@ typedef struct NlaStrip {
 
   /** Settings. */
   int flag;
-  char _pad2[4];
+  char _pad3[4];
 
   /* Pointer to an original NLA strip. */
   struct NlaStrip *orig_strip;
-
-  short repeatmode;
-  char _pad3[6];
 
   void *_pad4;
 } NlaStrip;
