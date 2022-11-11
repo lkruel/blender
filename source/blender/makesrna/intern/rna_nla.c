@@ -489,18 +489,6 @@ static void rna_NlaStrip_animated_influence_set(PointerRNA *ptr, bool value)
   }
 }
 
-//static void rna_NlaStrip_repeatmode_set(PointerRNA *ptr, bool value)
-//{
-//  NlaStrip *data = (NlaStrip *)ptr->data;
-//  if (value) {
-    /* set the flag, then make sure a curve for this exists */
-    //data->flag |= NLASTRIP_FLAG_REPEAT_WITH_OFFSET;
-//    BKE_nlastrip_validate_fcurves(data);
-//  }
-  //else {
-  //  data->flag &= ~NLASTRIP_FLAG_REPEAT_WITH_OFFSET;
-  //}
-//}
 
 static void rna_NlaStrip_animated_time_set(PointerRNA *ptr, bool value)
 {
@@ -736,7 +724,6 @@ static void rna_def_nlastrip(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_ANIMATION | ND_NLA, NULL); /* this will do? */
 
   /* Enums */
-  
   prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "type");
   RNA_def_property_clear_flag(
@@ -859,17 +846,6 @@ static void rna_def_nlastrip(BlenderRNA *brna)
   RNA_def_property_update(
       prop, NC_ANIMATION | ND_NLA | NA_EDITED, "rna_NlaStrip_transform_update");
 
-  /*
-  prop = RNA_def_property(srna, "repeat_with_offset", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "flag", NLASTRIP_FLAG_REPEAT_WITH_OFFSET);
-  RNA_def_property_boolean_funcs(prop, NULL, "rna_NlaStrip_repeat_with_offset_set");
-  RNA_def_property_ui_text(
-      prop,
-      "Repeat With Offset",
-      "Influence setting is controlled by an F-Curve rather than automatically determined");
-  RNA_def_property_update(prop, NC_ANIMATION | ND_NLA | NA_EDITED, "rna_NlaStrip_update");
-
-   */
   prop = RNA_def_property(srna, "repeatmode", PROP_ENUM, PROP_NONE);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   //RNA_def_property_float_funcs(prop, NULL, "rna_NlaStrip_repeatmode_set", NULL);
