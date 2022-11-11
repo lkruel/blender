@@ -759,7 +759,10 @@ typedef struct NlaStrip {
   /* Pointer to an original NLA strip. */
   struct NlaStrip *orig_strip;
 
-  void *_pad3;
+  short repeatmode;
+  char _pad3[6];
+
+  void *_pad4;
 } NlaStrip;
 
 /* NLA Strip Blending Mode */

@@ -2571,11 +2571,13 @@ static void nlasnapshot_from_action(PointerRNA *ptr,
                                     ListBase *modifiers,
                                     bAction *action,
                                     const float evaltime,
-                                    NlaEvalSnapshot *r_snapshot)
+                                    NlaEvalSnapshot *r_snapshot,
+                                    short repeatmode)
 {
   FCurve *fcu;
 
   action_idcode_patch_check(ptr->owner_id, action);
+
 
   /* Evaluate modifiers which modify time to evaluate the base curves at. */
   FModifiersStackStorage storage;
@@ -2585,6 +2587,8 @@ static void nlasnapshot_from_action(PointerRNA *ptr,
 
   const float modified_evaltime = evaluate_time_fmodifiers(
       &storage, modifiers, NULL, 0.0f, evaltime);
+
+  ListBase tmp_modifiers = {NULL, NULL};
 
   for (fcu = action->curves.first; fcu; fcu = fcu->next) {
     if (!is_fcurve_evaluatable(fcu)) {
@@ -2604,9 +2608,28 @@ static void nlasnapshot_from_action(PointerRNA *ptr,
 
     NlaEvalChannelSnapshot *necs = nlaeval_snapshot_ensure_channel(r_snapshot, nec);
 
-    float value = evaluate_fcurve(fcu, modified_evaltime);
+    FModifier *fcm = add_fmodifier(&tmp_modifiers, FMODIFIER_TYPE_CYCLES, fcu);
+    if (fcm != NULL) {
+      FMod_Cycles *data = (FMod_Cycles *)fcm->data;
+
+      data->before_mode = data->after_mode = repeatmode;
+    }
+    FModifiersStackStorage sec_storage;
+    sec_storage.modifier_count = BLI_listbase_count(&tmp_modifiers);
+    sec_storage.size_per_modifier = evaluate_fmodifiers_storage_size_per_modifier(&tmp_modifiers);
+    sec_storage.buffer = alloca(sec_storage.modifier_count * sec_storage.size_per_modifier);
+
+        
+    float offset = 0; 
+    float tmp_evaltime = evaluate_time_fmodifiers(&sec_storage, &tmp_modifiers, fcu, 0, evaltime);
+    evaluate_value_fmodifiers(&sec_storage, &tmp_modifiers, fcu, &offset, tmp_evaltime);
+    float value = evaluate_fcurve(fcu, tmp_evaltime) + offset;
+
     evaluate_value_fmodifiers(&storage, modifiers, fcu, &value, evaltime);
     necs->values[fcu->array_index] = value;
+
+    remove_fmodifier(&tmp_modifiers, fcm);
+
 
     if (nec->mix_mode == NEC_MIX_QUATERNION) {
       BLI_bitmap_set_all(necs->blend_domain.ptr, true, 4);
@@ -2650,7 +2673,7 @@ static void nlastrip_evaluate_actionclip(const int evaluation_mode,
       nlaeval_snapshot_init(&strip_snapshot, channels, NULL);
 
       nlasnapshot_from_action(
-          ptr, channels, &tmp_modifiers, strip->act, strip->strip_time, &strip_snapshot);
+          ptr, channels, &tmp_modifiers, strip->act, strip->strip_time, &strip_snapshot, strip->repeatmode);
       nlasnapshot_blend(
           channels, snapshot, &strip_snapshot, strip->blendmode, strip->influence, snapshot);
 
@@ -2664,7 +2687,7 @@ static void nlastrip_evaluate_actionclip(const int evaluation_mode,
       nlaeval_snapshot_init(&strip_snapshot, channels, NULL);
 
       nlasnapshot_from_action(
-          ptr, channels, &tmp_modifiers, strip->act, strip->strip_time, &strip_snapshot);
+          ptr, channels, &tmp_modifiers, strip->act, strip->strip_time, &strip_snapshot, strip->repeatmode);
       nlasnapshot_blend_get_inverted_lower_snapshot(
           channels, snapshot, &strip_snapshot, strip->blendmode, strip->influence, snapshot);
 
@@ -2673,8 +2696,13 @@ static void nlastrip_evaluate_actionclip(const int evaluation_mode,
       break;
     }
     case STRIP_EVAL_NOBLEND: {
-      nlasnapshot_from_action(
-          ptr, channels, &tmp_modifiers, strip->act, strip->strip_time, snapshot);
+      nlasnapshot_from_action(ptr,
+                              channels,
+                              &tmp_modifiers,
+                              strip->act,
+                              strip->strip_time,
+                              snapshot,
+                              strip->repeatmode);
       break;
     }
   }

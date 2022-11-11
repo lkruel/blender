@@ -485,6 +485,8 @@ static void nla_panel_actclip(const bContext *C, Panel *panel)
   uiLayoutSetActive(column, RNA_boolean_get(&strip_ptr, "use_animated_time") == false);
   uiItemR(column, &strip_ptr, "scale", 0, IFACE_("Playback Scale"), ICON_NONE);
   uiItemR(column, &strip_ptr, "repeat", 0, NULL, ICON_NONE);
+
+  uiItemR(column, &strip_ptr, "repeatmode", 0, NULL, ICON_NONE);
 }
 
 /* evaluation settings for active NLA-Strip */
