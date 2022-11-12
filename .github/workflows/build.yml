@@ -3,7 +3,7 @@ name: Build master
 on:
   push:
     branches:
-      - master
+      - repeat_with_offset
   # allow manual dispatches
   workflow_dispatch:
 
@@ -13,11 +13,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        builder: ["windows_master"]
+        builder: ["windows_repeat_with_offset"]
         include:
-          - builder: "windows_master"
+          - builder: "windows_repeat_with_offset"
             os: "windows-2019"
-            branch: "master"
+            branch: "repeat_with_offset"
           #- builder: "macos_master"
           #  os: "macos-10.15"
           #  branch: "master"
