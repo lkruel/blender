@@ -535,19 +535,11 @@ static float nlastrip_get_frame_actionclip(NlaStrip *strip, float cframe, short 
 {
   float actlength, scale;
   // float repeat; // UNUSED
-  return cframe;
+  
   /* get number of repeats */
   if (IS_EQF(strip->repeat, 0.0f)) {
     strip->repeat = 1.0f;
   }
-
-  if (strip->repeatmode != FCM_EXTRAPOLATE_NONE) {
-    return cframe;
-  }
-  else {
-    strip->repeat = 0.0f;
-  }
-
 
   // repeat = strip->repeat; /* UNUSED */
 
@@ -575,12 +567,12 @@ static float nlastrip_get_frame_actionclip(NlaStrip *strip, float cframe, short 
       return (strip->end + (strip->actstart * scale - cframe)) / scale;
     }
     /* if (mode == NLATIME_CONVERT_EVAL) */
-    if (IS_EQF((float)cframe, strip->end) && IS_EQF(strip->repeat, floorf(strip->repeat))) {
+    //if (IS_EQF((float)cframe, strip->end) && IS_EQF(strip->repeat, floorf(strip->repeat))) {
       /* This case prevents the motion snapping back to the first frame at the end of the strip
        * by catching the case where repeats is a whole number, which means that the end of the
        * strip could also be interpreted as the end of the start of a repeat. */
-      return strip->actstart;
-    }
+    //  return strip->actstart;
+    //}
 
     /* - the 'fmod(..., actlength * scale)' is needed to get the repeats working
      * - the '/ scale' is needed to ensure that scaling influences the timing within the repeat
@@ -595,12 +587,12 @@ static float nlastrip_get_frame_actionclip(NlaStrip *strip, float cframe, short 
     return strip->actstart + (cframe - strip->start) / scale;
   }
   /* if (mode == NLATIME_CONVERT_EVAL) */
-  if (IS_EQF(cframe, strip->end) && IS_EQF(strip->repeat, floorf(strip->repeat))) {
+  //if (IS_EQF(cframe, strip->end) && IS_EQF(strip->repeat, floorf(strip->repeat))) {
     /* This case prevents the motion snapping back to the first frame at the end of the strip
      * by catching the case where repeats is a whole number, which means that the end of the
      * strip could also be interpreted as the end of the start of a repeat. */
-    return strip->actend;
-  }
+  //  return strip->actend;
+  //}
 
  
 
@@ -608,7 +600,8 @@ static float nlastrip_get_frame_actionclip(NlaStrip *strip, float cframe, short 
   /* - the 'fmod(..., actlength * scale)' is needed to get the repeats working
    * - the '/ scale' is needed to ensure that scaling influences the timing within the repeat
    */
-  return strip->actstart + fmodf(cframe - strip->start, actlength * scale) / scale;
+
+  return strip->actstart + (cframe - strip->start) / scale;
 }
 
 /* non clipped mapping for strip-time <-> global time (for Transitions)

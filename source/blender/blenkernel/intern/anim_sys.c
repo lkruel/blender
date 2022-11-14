@@ -2611,8 +2611,26 @@ static void nlasnapshot_from_action(PointerRNA *ptr,
     FModifier *fcm = add_fmodifier(&tmp_modifiers, FMODIFIER_TYPE_CYCLES, fcu);
     if (fcm != NULL) {
       FMod_Cycles *data = (FMod_Cycles *)fcm->data;
+      if (repeatmode == FCM_EXTRAPOLATE_CYCLIC_OFFSET) {
+        //if (fcu->flag & ACT_TRANS_LOC) {
+        const char pPtr = strstr(fcu->rna_path, "location");
+        if (pPtr) {
 
-      data->before_mode = data->after_mode = repeatmode;
+            data->before_mode = data->after_mode = repeatmode;
+
+         }
+         else {
+
+            data->before_mode = data->after_mode = FCM_EXTRAPOLATE_CYCLIC;
+         }
+
+      }
+      else {
+
+          data->before_mode = data->after_mode = repeatmode;
+      }
+     
+      
     }
     FModifiersStackStorage sec_storage;
     sec_storage.modifier_count = BLI_listbase_count(&tmp_modifiers);
@@ -2696,13 +2714,8 @@ static void nlastrip_evaluate_actionclip(const int evaluation_mode,
       break;
     }
     case STRIP_EVAL_NOBLEND: {
-      nlasnapshot_from_action(ptr,
-                              channels,
-                              &tmp_modifiers,
-                              strip->act,
-                              strip->strip_time,
-                              snapshot,
-                              strip->repeatmode);
+      nlasnapshot_from_action(
+          ptr, channels, &tmp_modifiers, strip->act, strip->strip_time, snapshot, strip->repeatmode);
       break;
     }
   }
