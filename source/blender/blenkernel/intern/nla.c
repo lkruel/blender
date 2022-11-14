@@ -436,6 +436,7 @@ NlaStrip *BKE_nlastrip_new(bAction *act)
   /* strip should be referenced as-is */
   strip->scale = 1.0f;
   strip->repeat = 1.0f;
+  strip->repeatmode = FCM_EXTRAPOLATE_CYCLIC;
 
   /* return the new strip */
   return strip;
