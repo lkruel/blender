@@ -24,6 +24,7 @@
 
 #include "BLT_translation.h"
 
+#include "DNA_armature_types.h"
 #include "DNA_anim_types.h"
 #include "DNA_light_types.h"
 #include "DNA_material_types.h"
@@ -2589,6 +2590,7 @@ static void nlasnapshot_from_action(PointerRNA *ptr,
       &storage, modifiers, NULL, 0.0f, evaltime);
 
   ListBase tmp_modifiers = {NULL, NULL};
+  Object *ob = (Object *)ptr->owner_id;
 
   for (fcu = action->curves.first; fcu; fcu = fcu->next) {
     if (!is_fcurve_evaluatable(fcu)) {
@@ -2611,19 +2613,31 @@ static void nlasnapshot_from_action(PointerRNA *ptr,
     FModifier *fcm = add_fmodifier(&tmp_modifiers, FMODIFIER_TYPE_CYCLES, fcu);
     if (fcm != NULL) {
       FMod_Cycles *data = (FMod_Cycles *)fcm->data;
+
+      // If we're cycling with offset, we want to only do it to the root's location curves 
       if (repeatmode == FCM_EXTRAPOLATE_CYCLIC_OFFSET) {
-        //if (fcu->flag & ACT_TRANS_LOC) {
-        const char pPtr = strstr(fcu->rna_path, "location");
-        if (pPtr) {
 
-            data->before_mode = data->after_mode = repeatmode;
+        const char is_location = strstr(fcu->rna_path, "location");
+        bPoseChannel *pchan = NULL;
+        char bone_name[sizeof(pchan->name)];
+        
+        /* Only consider if F-Curve involves `pose.bones`. */
+        if (fcu->rna_path &&
+            BLI_str_quoted_substr(fcu->rna_path, "pose.bones[", bone_name, sizeof(bone_name))) {
+          /* Get bone-name, and check if this bone is selected. */
+          pchan = BKE_pose_channel_find_name(ob->pose, bone_name);
+          /* check whether to continue or skip */
+          if (pchan && pchan->bone && is_location && pchan->bone->parent == NULL) {
 
-         }
-         else {
-
-            data->before_mode = data->after_mode = FCM_EXTRAPOLATE_CYCLIC;
-         }
-
+              data->before_mode = data->after_mode = repeatmode;
+             
+          }
+          else {
+              data->before_mode = data->after_mode = FCM_EXTRAPOLATE_CYCLIC;
+          }
+          
+        }
+    
       }
       else {
 
