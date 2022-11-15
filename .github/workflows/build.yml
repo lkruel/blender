@@ -98,11 +98,13 @@ jobs:
           path: C:/blender-git/install
           
       - name: make release 
-        uses: "marvinpinto/action-automatic-releases@latest"
+        uses: ncipollo/release-action@v1
         with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: ${{ steps.buildnumber.outputs.build_number }}
-          prerelease: false
-          title: "Development Build v ${{ steps.buildnumber.outputs.build_number }}"
-          files: C:/blender-git/install/blender-${{ matrix.builder }}-${{ steps.buildnumber.outputs.build_number }}
-
+          artifacts: "blender-${{ matrix.builder }}-${{ steps.buildnumber.outputs.build_number }}"
+      #  uses: "marvinpinto/action-automatic-releases@latest"
+      #  with:
+      #    repo_token: "${{ secrets.GITHUB_TOKEN }}"
+      #    automatic_release_tag: ${{ steps.buildnumber.outputs.build_number }}
+      #    prerelease: false
+      #    title: "Development Build v ${{ steps.buildnumber.outputs.build_number }}"
+      #    files: blender-${{ matrix.builder }}-${{ steps.buildnumber.outputs.build_number }}
