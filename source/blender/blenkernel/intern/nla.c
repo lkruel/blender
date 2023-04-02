@@ -602,7 +602,7 @@ static float nlastrip_get_frame_actionclip(NlaStrip *strip, float cframe, short 
    * - the '/ scale' is needed to ensure that scaling influences the timing within the repeat
    */
 
-  return strip->actstart + (cframe - strip->start) / scale;
+  return strip->actstart + ((cframe - strip->start) * actlength) / scale;
 }
 
 /* non clipped mapping for strip-time <-> global time (for Transitions)
