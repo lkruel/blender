@@ -163,7 +163,11 @@ typedef struct Image {
   short gpu_pass;
   short gpu_layer;
   short gpu_view;
-  char _pad2[4];
+
+  /* Number of iterations to perform when extracting mask for uv seam fixing. */
+  short seam_margin;
+
+  char _pad2[2];
 
   /** Deprecated. */
   struct PackedFile *packedfile DNA_DEPRECATED;
@@ -191,6 +195,9 @@ typedef struct Image {
   /** For viewer node stereoscopy. */
   char eye;
   char views_format;
+
+  /** Offset caused by translation. Used in compositor backdrop for viewer nodes in image space. */
+  int offset_x, offset_y;
 
   /* ImageTile list for UDIMs. */
   int active_tile_index;

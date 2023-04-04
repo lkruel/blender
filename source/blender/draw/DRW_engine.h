@@ -121,7 +121,7 @@ void DRW_draw_select_loop(struct Depsgraph *depsgraph,
                           DRW_ObjectFilterFn object_filter_fn,
                           void *object_filter_user_data);
 /**
- * object mode select-loop, see: #ED_view3d_draw_depth_loop (legacy drawing).
+ * Object mode select-loop, see: #ED_view3d_draw_depth_loop (legacy drawing).
  */
 void DRW_draw_depth_loop(struct Depsgraph *depsgraph,
                          struct ARegion *region,
@@ -167,7 +167,7 @@ void DRW_opengl_context_enable(void);
 void DRW_opengl_context_disable(void);
 
 #ifdef WITH_XR_OPENXR
-/* XXX see comment on DRW_xr_opengl_context_get() */
+/* XXX: see comment on #DRW_xr_opengl_context_get() */
 void *DRW_xr_opengl_context_get(void);
 void *DRW_xr_gpu_context_get(void);
 void DRW_xr_drawing_begin(void);
@@ -197,6 +197,7 @@ void DRW_gpu_render_context_enable(void *re_gpu_context);
 void DRW_gpu_render_context_disable(void *re_gpu_context);
 
 void DRW_deferred_shader_remove(struct GPUMaterial *mat);
+void DRW_deferred_shader_optimize_remove(struct GPUMaterial *mat);
 
 /**
  * Get DrawData from the given ID-block. In order for this to work, we assume that

@@ -186,12 +186,14 @@ void ED_spacetypes_keymap(wmKeyConfig *keyconf)
   ED_keymap_mesh(keyconf);
   ED_keymap_uvedit(keyconf);
   ED_keymap_curve(keyconf);
+  ED_keymap_curves(keyconf);
   ED_keymap_armature(keyconf);
   ED_keymap_physics(keyconf);
   ED_keymap_metaball(keyconf);
   ED_keymap_paint(keyconf);
   ED_keymap_mask(keyconf);
   ED_keymap_marker(keyconf);
+  ED_keymap_sculpt(keyconf);
 
   ED_keymap_view2d(keyconf);
   ED_keymap_ui(keyconf);
@@ -296,9 +298,7 @@ static SpaceLink *xxx_create(const ScrArea *UNUSED(area), const Scene *UNUSED(sc
 }
 
 /* not spacelink itself */
-static void xxx_free(SpaceLink *UNUSED(sl))
-{
-}
+static void xxx_free(SpaceLink *UNUSED(sl)) {}
 
 /* spacetype; init callback for usage, should be re-doable. */
 static void xxx_init(wmWindowManager *UNUSED(wm), ScrArea *UNUSED(area))

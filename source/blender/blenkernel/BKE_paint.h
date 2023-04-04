@@ -37,9 +37,7 @@ struct Image;
 struct ImagePool;
 struct ImageUser;
 struct ListBase;
-struct MLoop;
 struct MLoopTri;
-struct MVert;
 struct Main;
 struct Mesh;
 struct MeshElemMap;
@@ -53,6 +51,7 @@ struct PaletteColor;
 struct Scene;
 struct StrokeCache;
 struct Sculpt;
+struct SculptSession;
 struct SubdivCCG;
 struct Tex;
 struct ToolSettings;
@@ -67,6 +66,7 @@ extern const uchar PAINT_CURSOR_SCULPT[3];
 extern const uchar PAINT_CURSOR_VERTEX_PAINT[3];
 extern const uchar PAINT_CURSOR_WEIGHT_PAINT[3];
 extern const uchar PAINT_CURSOR_TEXTURE_PAINT[3];
+extern const uchar PAINT_CURSOR_SCULPT_CURVES[3];
 
 typedef enum ePaintMode {
   PAINT_MODE_SCULPT = 0,
@@ -119,6 +119,7 @@ typedef enum ePaintSymmetryAreas {
   PAINT_SYMM_AREA_Y = (1 << 1),
   PAINT_SYMM_AREA_Z = (1 << 2),
 } ePaintSymmetryAreas;
+ENUM_OPERATORS(ePaintSymmetryAreas, PAINT_SYMM_AREA_Z);
 
 #define PAINT_SYMM_AREAS 8
 
@@ -392,9 +393,6 @@ typedef struct SculptPersistentBase {
 } SculptPersistentBase;
 
 typedef struct SculptVertexInfo {
-  /* Indexed by vertex, stores and ID of its topologically connected component. */
-  int *connected_component;
-
   /* Indexed by base mesh vertex index, stores if that vertex is a boundary. */
   BLI_bitmap *boundary;
 } SculptVertexInfo;
@@ -515,6 +513,11 @@ typedef struct SculptAttribute {
   int elem_size, elem_num;
   bool data_for_bmesh; /* Temporary data store as array outside of bmesh. */
 
+  /* Data is a flat array outside the CustomData system.
+   * This will be true if simple_array is requested in
+   * SculptAttributeParams, or the PBVH type is PBVH_GRIDS or PBVH_BMESH.
+   */
+  bool simple_array;
   /* Data stored per BMesh element. */
   int bmesh_cd_offset;
 
@@ -554,10 +557,14 @@ typedef struct SculptAttributePointers {
   SculptAttribute *automasking_stroke_id;
   SculptAttribute *automasking_cavity;
 
+  SculptAttribute *topology_island_key; /* CD_PROP_INT8 */
+
   /* BMesh */
   SculptAttribute *dyntopo_node_id_vertex;
   SculptAttribute *dyntopo_node_id_face;
 } SculptAttributePointers;
+
+#ifdef __cplusplus
 
 typedef struct SculptSession {
   /* Mesh data (not copied) can come either directly from a Mesh, or from a MultiresDM */
@@ -571,9 +578,9 @@ typedef struct SculptSession {
   struct Depsgraph *depsgraph;
 
   /* These are always assigned to base mesh data when using PBVH_FACES and PBVH_GRIDS. */
-  struct MVert *mvert;
-  const struct MPoly *mpoly;
-  const struct MLoop *mloop;
+  float (*vert_positions)[3];
+  blender::Span<MPoly> polys;
+  blender::Span<int> corner_verts;
 
   /* These contain the vertex and poly counts of the final mesh. */
   int totvert, totpoly;
@@ -626,8 +633,6 @@ typedef struct SculptSession {
 
   /* PBVH acceleration structure */
   struct PBVH *pbvh;
-  bool show_mask;
-  bool show_face_sets;
 
   /* Painting on deformed mesh */
   bool deform_modifiers_active; /* Object is deformed with some modifiers. */
@@ -753,14 +758,17 @@ typedef struct SculptSession {
 
   int last_automasking_settings_hash;
   uchar last_automask_stroke_id;
+  bool islands_valid; /* Is attrs.topology_island_key valid? */
 } SculptSession;
+
+#endif
 
 void BKE_sculptsession_free(struct Object *ob);
 void BKE_sculptsession_free_deformMats(struct SculptSession *ss);
 void BKE_sculptsession_free_vwpaint_data(struct SculptSession *ss);
 void BKE_sculptsession_bm_to_me(struct Object *ob, bool reorder);
 void BKE_sculptsession_bm_to_me_for_render(struct Object *object);
-int BKE_sculptsession_vertex_count(const SculptSession *ss);
+int BKE_sculptsession_vertex_count(const struct SculptSession *ss);
 
 /* Ensure an attribute layer exists. */
 SculptAttribute *BKE_sculpt_attribute_ensure(struct Object *ob,
@@ -907,6 +915,11 @@ enum {
 bool BKE_object_attributes_active_color_fill(struct Object *ob,
                                              const float fill_color[4],
                                              bool only_selected);
+
+/** C accessor for #Object::sculpt::pbvh. */
+struct PBVH *BKE_object_sculpt_pbvh_get(struct Object *object);
+bool BKE_object_sculpt_use_dyntopo(const struct Object *object);
+void BKE_object_sculpt_dyntopo_smooth_shading_set(struct Object *object, bool value);
 
 /* paint_canvas.cc */
 

@@ -142,11 +142,8 @@ static int viewdolly_modal(bContext *C, wmOperator *op, const wmEvent *event)
   bool use_autokey = false;
   int ret = OPERATOR_RUNNING_MODAL;
 
-  /* execute the events */
-  if (event->type == MOUSEMOVE) {
-    event_code = VIEW_APPLY;
-  }
-  else if (event->type == EVT_MODAL_MAP) {
+  /* Execute the events. */
+  if (event->type == EVT_MODAL_MAP) {
     switch (event->val) {
       case VIEW_MODAL_CONFIRM:
         event_code = VIEW_CONFIRM;
@@ -161,27 +158,52 @@ static int viewdolly_modal(bContext *C, wmOperator *op, const wmEvent *event)
         break;
     }
   }
-  else if (event->type == vod->init.event_type && event->val == KM_RELEASE) {
-    event_code = VIEW_CONFIRM;
-  }
-
-  if (event_code == VIEW_APPLY) {
-    viewdolly_apply(vod, event->xy, (U.uiflag & USER_ZOOM_INVERT) != 0);
-    if (ED_screen_animation_playing(CTX_wm_manager(C))) {
-      use_autokey = true;
+  else {
+    if (event->type == MOUSEMOVE) {
+      event_code = VIEW_APPLY;
+    }
+    else if (event->type == vod->init.event_type) {
+      if (event->val == KM_RELEASE) {
+        event_code = VIEW_CONFIRM;
+      }
+    }
+    else if (ELEM(event->type, EVT_ESCKEY, RIGHTMOUSE)) {
+      if (event->val == KM_PRESS) {
+        event_code = VIEW_CANCEL;
+      }
     }
   }
-  else if (event_code == VIEW_CONFIRM) {
-    use_autokey = true;
-    ret = OPERATOR_FINISHED;
+
+  switch (event_code) {
+    case VIEW_APPLY: {
+      viewdolly_apply(vod, event->xy, (U.uiflag & USER_ZOOM_INVERT) != 0);
+      if (ED_screen_animation_playing(CTX_wm_manager(C))) {
+        use_autokey = true;
+      }
+      break;
+    }
+    case VIEW_CONFIRM: {
+      use_autokey = true;
+      ret = OPERATOR_FINISHED;
+      break;
+    }
+    case VIEW_CANCEL: {
+      /* Note this does not remove auto-keys on locked cameras. */
+      copy_v3_v3(vod->rv3d->ofs, vod->init.ofs);
+      ED_view3d_camera_lock_sync(vod->depsgraph, vod->v3d, vod->rv3d);
+      ret = OPERATOR_CANCELLED;
+      break;
+    }
   }
 
   if (use_autokey) {
     ED_view3d_camera_lock_autokey(vod->v3d, vod->rv3d, C, false, true);
   }
 
-  if (ret & OPERATOR_FINISHED) {
-    ED_view3d_camera_lock_undo_push(op->type->name, vod->v3d, vod->rv3d, C);
+  if ((ret & OPERATOR_RUNNING_MODAL) == 0) {
+    if (ret & OPERATOR_FINISHED) {
+      ED_view3d_camera_lock_undo_push(op->type->name, vod->v3d, vod->rv3d, C);
+    }
     viewops_data_free(C, vod);
     op->customdata = NULL;
   }
@@ -314,12 +336,6 @@ static int viewdolly_invoke(bContext *C, wmOperator *op, const wmEvent *event)
   return OPERATOR_FINISHED;
 }
 
-static void viewdolly_cancel(bContext *C, wmOperator *op)
-{
-  viewops_data_free(C, op->customdata);
-  op->customdata = NULL;
-}
-
 void VIEW3D_OT_dolly(wmOperatorType *ot)
 {
   /* identifiers */
@@ -332,7 +348,7 @@ void VIEW3D_OT_dolly(wmOperatorType *ot)
   ot->exec = viewdolly_exec;
   ot->modal = viewdolly_modal;
   ot->poll = view3d_rotation_poll;
-  ot->cancel = viewdolly_cancel;
+  ot->cancel = view3d_navigate_cancel_fn;
 
   /* flags */
   ot->flag = OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR_XY | OPTYPE_DEPENDS_ON_CURSOR;

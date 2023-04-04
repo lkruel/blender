@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2005 Blender Foundation. All rights reserved. */
+ * Copyright 2005 Blender Foundation */
 
 /** \file
  * \ingroup shdnodes
@@ -29,7 +29,7 @@ static void sh_node_value_build_multi_function(NodeMultiFunctionBuilder &builder
 {
   const bNodeSocket *bsocket = (bNodeSocket *)builder.node().outputs.first;
   const bNodeSocketValueFloat *value = (const bNodeSocketValueFloat *)bsocket->default_value;
-  builder.construct_and_set_matching_fn<fn::CustomMF_Constant<float>>(value->value);
+  builder.construct_and_set_matching_fn<mf::CustomMF_Constant<float>>(value->value);
 }
 
 }  // namespace blender::nodes::node_shader_value_cc

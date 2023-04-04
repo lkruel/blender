@@ -183,13 +183,9 @@ TfStaticData<UsdToCycles> sUsdToCyles;
 
 }  // namespace
 
-HdCyclesMaterial::HdCyclesMaterial(const SdfPath &sprimId) : HdMaterial(sprimId)
-{
-}
+HdCyclesMaterial::HdCyclesMaterial(const SdfPath &sprimId) : HdMaterial(sprimId) {}
 
-HdCyclesMaterial::~HdCyclesMaterial()
-{
-}
+HdCyclesMaterial::~HdCyclesMaterial() {}
 
 HdDirtyBits HdCyclesMaterial::GetInitialDirtyBitsMask() const
 {
@@ -235,7 +231,11 @@ void HdCyclesMaterial::Sync(HdSceneDelegate *sceneDelegate,
       }
       else {
         networkConverted = std::make_unique<HdMaterialNetwork2>();
+#  if PXR_VERSION >= 2205
+        *networkConverted = HdConvertToHdMaterialNetwork2(networkOld);
+#  else
         HdMaterialNetwork2ConvertFromHdMaterialNetworkMap(networkOld, networkConverted.get());
+#  endif
         network = networkConverted.get();
       }
     }

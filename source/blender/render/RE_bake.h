@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2010 Blender Foundation. All rights reserved. */
+ * Copyright 2010 Blender Foundation */
 
 /** \file
  * \ingroup render
@@ -11,7 +11,6 @@
 
 struct Depsgraph;
 struct ImBuf;
-struct MLoopUV;
 struct Mesh;
 struct Render;
 

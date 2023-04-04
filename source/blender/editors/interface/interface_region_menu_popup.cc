@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2008 Blender Foundation. All rights reserved. */
+ * Copyright 2008 Blender Foundation */
 
 /** \file
  * \ingroup edinterface
@@ -39,7 +39,7 @@
 
 #include "ED_screen.h"
 
-#include "interface_intern.h"
+#include "interface_intern.hh"
 #include "interface_regions_intern.hh"
 
 /* -------------------------------------------------------------------- */
@@ -408,7 +408,7 @@ static uiPopupBlockHandle *ui_popup_menu_create(
 #if 0
     /* if this is an rna button then we can assume its an enum
      * flipping enums is generally not good since the order can be
-     * important T28786. */
+     * important #28786. */
     if (but->rnaprop && RNA_property_type(but->rnaprop) == PROP_ENUM) {
       pup->block->flag |= UI_BLOCK_NO_FLIP;
     }
@@ -475,7 +475,6 @@ static void create_title_button(uiLayout *layout, const char *title, int icon)
   uiItemS(layout);
 }
 
-/* Used to directly create a popup menu that is not refreshed on redraw. */
 uiPopupMenu *UI_popup_menu_begin_ex(bContext *C,
                                     const char *title,
                                     const char *block_name,
@@ -745,7 +744,7 @@ void UI_popup_block_close(bContext *C, wmWindow *win, uiBlock *block)
       ui_popup_block_free(C, block->handle);
 
       /* In the case we have nested popups,
-       * closing one may need to redraw another, see: T48874 */
+       * closing one may need to redraw another, see: #48874 */
       LISTBASE_FOREACH (ARegion *, region, &screen->regionbase) {
         ED_region_tag_refresh_ui(region);
       }

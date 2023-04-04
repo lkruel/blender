@@ -80,6 +80,11 @@ static const EnumPropertyItem prop_graphkeys_insertkey_types[] = {
      0,
      "Only Selected Channels",
      "Insert a keyframe on selected F-Curves using each curve's current value"},
+    {GRAPHKEYS_INSERTKEY_ACTIVE,
+     "ACTIVE",
+     0,
+     "Only Active F-Curve",
+     "Insert a keyframe on the active F-Curve using the curve's current value"},
     {GRAPHKEYS_INSERTKEY_ACTIVE | GRAPHKEYS_INSERTKEY_CURSOR,
      "CURSOR_ACTIVE",
      0,
@@ -475,6 +480,7 @@ static short copy_graph_keys(bAnimContext *ac)
 
 static eKeyPasteError paste_graph_keys(bAnimContext *ac,
                                        const eKeyPasteOffset offset_mode,
+                                       const eKeyPasteValueOffset value_offset_mode,
                                        const eKeyMergeMode merge_mode,
                                        bool flip)
 {
@@ -485,7 +491,7 @@ static eKeyPasteError paste_graph_keys(bAnimContext *ac,
    * - First time we try to filter more strictly, allowing only selected channels
    *   to allow copying animation between channels
    * - Second time, we loosen things up if nothing was found the first time, allowing
-   *   users to just paste keyframes back into the original curve again T31670.
+   *   users to just paste keyframes back into the original curve again #31670.
    */
   filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_CURVE_VISIBLE | ANIMFILTER_FCURVESONLY |
             ANIMFILTER_FOREDIT | ANIMFILTER_NODUPLIS);
@@ -495,7 +501,8 @@ static eKeyPasteError paste_graph_keys(bAnimContext *ac,
   }
 
   /* Paste keyframes. */
-  const eKeyPasteError ok = paste_animedit_keys(ac, &anim_data, offset_mode, merge_mode, flip);
+  const eKeyPasteError ok = paste_animedit_keys(
+      ac, &anim_data, offset_mode, value_offset_mode, merge_mode, flip);
 
   /* Clean up. */
   ANIM_animdata_freelist(&anim_data);
@@ -544,6 +551,7 @@ static int graphkeys_paste_exec(bContext *C, wmOperator *op)
   bAnimContext ac;
 
   const eKeyPasteOffset offset_mode = RNA_enum_get(op->ptr, "offset");
+  const eKeyPasteValueOffset value_offset_mode = RNA_enum_get(op->ptr, "value_offset");
   const eKeyMergeMode merge_mode = RNA_enum_get(op->ptr, "merge");
   const bool flipped = RNA_boolean_get(op->ptr, "flipped");
 
@@ -555,7 +563,8 @@ static int graphkeys_paste_exec(bContext *C, wmOperator *op)
   /* Ac.reports by default will be the global reports list, which won't show warnings. */
   ac.reports = op->reports;
 
-  const eKeyPasteError kf_empty = paste_graph_keys(&ac, offset_mode, merge_mode, flipped);
+  const eKeyPasteError kf_empty = paste_graph_keys(
+      &ac, offset_mode, value_offset_mode, merge_mode, flipped);
   switch (kf_empty) {
     case KEYFRAME_PASTE_OK:
       break;
@@ -614,8 +623,14 @@ void GRAPH_OT_paste(wmOperatorType *ot)
                "offset",
                rna_enum_keyframe_paste_offset_items,
                KEYFRAME_PASTE_OFFSET_CFRA_START,
-               "Offset",
+               "Frame Offset",
                "Paste time offset of keys");
+  RNA_def_enum(ot->srna,
+               "value_offset",
+               rna_enum_keyframe_paste_offset_value,
+               KEYFRAME_PASTE_VALUE_OFFSET_NONE,
+               "Value Offset",
+               "Paste keys with a value offset");
   RNA_def_enum(ot->srna,
                "merge",
                rna_enum_keyframe_paste_merge_items,
@@ -1880,6 +1895,11 @@ static bool euler_filter_single_channel(FCurve *fcu)
     return false;
   }
 
+  /* Skip baked FCurves. */
+  if (fcu->bezt == NULL) {
+    return false;
+  }
+
   /* `prev` follows bezt, bezt = "current" point to be fixed. */
   /* Our method depends on determining a "difference" from the previous vert. */
   bool is_modified = false;
@@ -2279,6 +2299,7 @@ static void snap_graph_keys(bAnimContext *ac, short mode)
   edit_cb = ANIM_editkeyframes_snap(mode);
 
   /* Snap keyframes. */
+  const bool use_handle = (sipo->flag & SIPO_NOHANDLES) == 0;
   for (ale = anim_data.first; ale; ale = ale->next) {
     AnimData *adt = ANIM_nla_mapping_get(ac, ale);
 
@@ -2296,10 +2317,12 @@ static void snap_graph_keys(bAnimContext *ac, short mode)
     if (adt) {
       ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 0, 0);
       ANIM_fcurve_keyframes_loop(&ked, ale->key_data, NULL, edit_cb, BKE_fcurve_handles_recalc);
+      BKE_fcurve_merge_duplicate_keys(ale->key_data, BEZT_FLAG_TEMP_TAG, use_handle);
       ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 1, 0);
     }
     else {
       ANIM_fcurve_keyframes_loop(&ked, ale->key_data, NULL, edit_cb, BKE_fcurve_handles_recalc);
+      BKE_fcurve_merge_duplicate_keys(ale->key_data, BEZT_FLAG_TEMP_TAG, use_handle);
     }
 
     ale->update |= ANIM_UPDATE_DEFAULT;
@@ -2333,6 +2356,48 @@ static int graphkeys_snap_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
+static bool graph_has_selected_control_points(struct bContext *C)
+{
+  bAnimContext ac;
+  ListBase anim_data = {NULL, NULL};
+
+  /* Get editor data. */
+  if (ANIM_animdata_get_context(C, &ac) == 0) {
+    return OPERATOR_CANCELLED;
+  }
+
+  /* Filter data. */
+  const int filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_CURVE_VISIBLE | ANIMFILTER_FCURVESONLY |
+                      ANIMFILTER_FOREDIT | ANIMFILTER_NODUPLIS);
+  ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, ac.datatype);
+
+  /* Check if any of the visible and editable f-curves have at least one selected control point. */
+  bool has_selected_control_points = false;
+  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
+    const FCurve *fcu = ale->key_data;
+    if (BKE_fcurve_has_selected_control_points(fcu)) {
+      has_selected_control_points = true;
+      break;
+    }
+  }
+
+  ANIM_animdata_freelist(&anim_data);
+
+  return has_selected_control_points;
+}
+
+static int graphkeys_selected_control_points_invoke(struct bContext *C,
+                                                    struct wmOperator *op,
+                                                    const struct wmEvent *event)
+{
+  if (!graph_has_selected_control_points(C)) {
+    BKE_report(op->reports, RPT_ERROR, "No control points are selected");
+    return OPERATOR_CANCELLED;
+  }
+
+  return WM_menu_invoke(C, op, event);
+}
+
 void GRAPH_OT_snap(wmOperatorType *ot)
 {
   /* Identifiers */
@@ -2341,7 +2406,7 @@ void GRAPH_OT_snap(wmOperatorType *ot)
   ot->description = "Snap selected keyframes to the chosen times/values";
 
   /* API callbacks */
-  ot->invoke = WM_menu_invoke;
+  ot->invoke = graphkeys_selected_control_points_invoke;
   ot->exec = graphkeys_snap_exec;
   ot->poll = graphop_editable_keyframes_poll;
 
@@ -2418,7 +2483,7 @@ void GRAPH_OT_equalize_handles(wmOperatorType *ot)
       "Ensure selected keyframes' handles have equal length, optionally making them horizontal. "
       "Automatic, Automatic Clamped, or Vector handle types will be converted to Aligned";
   /* API callbacks */
-  ot->invoke = WM_menu_invoke;
+  ot->invoke = graphkeys_selected_control_points_invoke;
   ot->exec = graphkeys_equalize_handles_exec;
   ot->poll = graphop_editable_keyframes_poll;
 
@@ -2793,7 +2858,7 @@ void GRAPH_OT_fmodifier_add(wmOperatorType *ot)
   ot->prop = prop;
 
   RNA_def_boolean(
-      ot->srna, "only_active", 1, "Only Active", "Only add F-Modifier to active F-Curve");
+      ot->srna, "only_active", false, "Only Active", "Only add F-Modifier to active F-Curve");
 }
 
 /** \} */

@@ -72,7 +72,7 @@ template<
      * The equality operator used to compare keys. By default it will simply compare keys using the
      * `==` operator.
      */
-    typename IsEqual = DefaultEquality,
+    typename IsEqual = DefaultEquality<Key>,
     /**
      * This is what will actually be stored in the hash table array. At a minimum a slot has to be
      * able to hold an array index and information about whether the slot is empty, occupied or
@@ -163,9 +163,7 @@ class VectorSet {
   {
   }
 
-  VectorSet(NoExceptConstructor, Allocator allocator = {}) : VectorSet(allocator)
-  {
-  }
+  VectorSet(NoExceptConstructor, Allocator allocator = {}) : VectorSet(allocator) {}
 
   VectorSet(Span<Key> keys, Allocator allocator = {}) : VectorSet(NoExceptConstructor(), allocator)
   {
@@ -561,6 +559,15 @@ class VectorSet {
   }
 
   /**
+   * Removes all keys from the set and frees any allocated memory.
+   */
+  void clear_and_shrink()
+  {
+    std::destroy_at(this);
+    new (this) VectorSet(NoExceptConstructor{});
+  }
+
+  /**
    * Get the number of collisions that the probing strategy has to go through to find the key or
    * determine that it is not in the set.
    */
@@ -874,7 +881,7 @@ class VectorSet {
 template<typename Key,
          typename ProbingStrategy = DefaultProbingStrategy,
          typename Hash = DefaultHash<Key>,
-         typename IsEqual = DefaultEquality,
+         typename IsEqual = DefaultEquality<Key>,
          typename Slot = typename DefaultVectorSetSlot<Key>::type>
 using RawVectorSet = VectorSet<Key, ProbingStrategy, Hash, IsEqual, Slot, RawAllocator>;
 

@@ -536,7 +536,6 @@ const char *PyC_StringEnum_FindIDFromValue(const struct PyC_StringEnumItems *ite
   return NULL;
 }
 
-/* Silly function, we don't use arg. just check its compatible with `__deepcopy__`. */
 int PyC_CheckArgs_DeepCopy(PyObject *args)
 {
   PyObject *dummy_pydict;
@@ -553,7 +552,6 @@ int PyC_CheckArgs_DeepCopy(PyObject *args)
  * These are useful to run directly from a debugger to be able to inspect the state.
  * \{ */
 
-/* for debugging */
 void PyC_ObSpit(const char *name, PyObject *var)
 {
   const char *null_str = "<null>";
@@ -707,9 +705,10 @@ void PyC_FileAndNum_Safe(const char **r_filename, int *r_lineno)
 /** \name Object Access Utilities
  * \{ */
 
-/* Would be nice if python had this built in */
 PyObject *PyC_Object_GetAttrStringArgs(PyObject *o, Py_ssize_t n, ...)
 {
+  /* NOTE: Would be nice if python had this built in. */
+
   Py_ssize_t i;
   PyObject *item = o;
   const char *attr;
@@ -835,11 +834,11 @@ static void pyc_exception_buffer_handle_system_exit(PyObject *error_type,
     return;
   }
 
-  /* NOTE(@campbellbarton): A `SystemExit` exception will exit immediately (unless inspecting).
+  /* NOTE(@ideasman42): A `SystemExit` exception will exit immediately (unless inspecting).
    * So print the error and exit now. This is necessary as the call to #PyErr_Print exits,
    * the temporary `sys.stderr` assignment causes the output to be suppressed, failing silently.
    * Instead, restore the error and print it. If Python changes it's behavior and doesn't exit in
-   * the future - continue to create the exception buffer, see: T99966.
+   * the future - continue to create the exception buffer, see: #99966.
    *
    * Arguably accessing a `SystemExit` exception as a buffer should be supported without exiting.
    * (by temporarily enabling inspection for example) however - it's not obvious exactly when this
@@ -1012,7 +1011,7 @@ PyObject *PyC_ExceptionBuffer_Simple(void)
  * In some cases we need to coerce strings, avoid doing this inline.
  * \{ */
 
-const char *PyC_UnicodeAsByteAndSize(PyObject *py_str, Py_ssize_t *size, PyObject **coerce)
+const char *PyC_UnicodeAsBytesAndSize(PyObject *py_str, Py_ssize_t *size, PyObject **coerce)
 {
   const char *result;
 
@@ -1039,7 +1038,7 @@ const char *PyC_UnicodeAsByteAndSize(PyObject *py_str, Py_ssize_t *size, PyObjec
   return NULL;
 }
 
-const char *PyC_UnicodeAsByte(PyObject *py_str, PyObject **coerce)
+const char *PyC_UnicodeAsBytes(PyObject *py_str, PyObject **coerce)
 {
   const char *result;
 
@@ -1064,7 +1063,7 @@ const char *PyC_UnicodeAsByte(PyObject *py_str, PyObject **coerce)
   return NULL;
 }
 
-PyObject *PyC_UnicodeFromByteAndSize(const char *str, Py_ssize_t size)
+PyObject *PyC_UnicodeFromBytesAndSize(const char *str, Py_ssize_t size)
 {
   PyObject *result = PyUnicode_FromStringAndSize(str, size);
   if (result) {
@@ -1079,9 +1078,9 @@ PyObject *PyC_UnicodeFromByteAndSize(const char *str, Py_ssize_t size)
   return result;
 }
 
-PyObject *PyC_UnicodeFromByte(const char *str)
+PyObject *PyC_UnicodeFromBytes(const char *str)
 {
-  return PyC_UnicodeFromByteAndSize(str, strlen(str));
+  return PyC_UnicodeFromBytesAndSize(str, strlen(str));
 }
 
 /** \} */
@@ -1101,7 +1100,7 @@ PyObject *PyC_DefaultNameSpace(const char *filename)
   if (filename) {
     /* __file__ mainly for nice UI'ness
      * NOTE: this won't map to a real file when executing text-blocks and buttons. */
-    PyModule_AddObject(mod_main, "__file__", PyC_UnicodeFromByte(filename));
+    PyModule_AddObject(mod_main, "__file__", PyC_UnicodeFromBytes(filename));
   }
   PyModule_AddObject(mod_main, "__builtins__", builtins);
   Py_INCREF(builtins); /* AddObject steals a reference */
@@ -1154,11 +1153,11 @@ bool PyC_IsInterpreterActive(void)
 /** \name #Py_SetPythonHome Wrapper
  * \{ */
 
-/* Would be nice if python had this built in
- * See: https://wiki.blender.org/wiki/Tools/Debugging/PyFromC
- */
 void PyC_RunQuicky(const char *filepath, int n, ...)
 {
+  /* NOTE: Would be nice if python had this built in
+   * See: https://wiki.blender.org/wiki/Tools/Debugging/PyFromC */
+
   FILE *fp = fopen(filepath, "r");
 
   if (fp) {
@@ -1303,7 +1302,6 @@ void PyC_RunQuicky(const char *filepath, int n, ...)
   }
 }
 
-/* generic function to avoid depending on RNA */
 void *PyC_RNA_AsPointer(PyObject *value, const char *type_name)
 {
   PyObject *as_pointer;

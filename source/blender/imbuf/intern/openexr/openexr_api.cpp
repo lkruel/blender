@@ -139,9 +139,7 @@ class IMemStream : public Imf::IStream {
     _exrpos = pos;
   }
 
-  void clear() override
-  {
-  }
+  void clear() override {}
 
  private:
   exr_file_offset_t _exrpos;
@@ -277,9 +275,7 @@ class IFileStream : public Imf::IStream {
 
 class OMemStream : public OStream {
  public:
-  OMemStream(ImBuf *ibuf_) : OStream("<memory>"), ibuf(ibuf_), offset(0)
-  {
-  }
+  OMemStream(ImBuf *ibuf_) : OStream("<memory>"), ibuf(ibuf_), offset(0) {}
 
   void write(const char c[], int n) override
   {
@@ -441,7 +437,7 @@ static void openexr_header_metadata(Header *header, struct ImBuf *ibuf)
     IDProperty *prop;
 
     for (prop = (IDProperty *)ibuf->metadata->data.group.first; prop; prop = prop->next) {
-      if (prop->type == IDP_STRING) {
+      if (prop->type == IDP_STRING && !STREQ(prop->name, "compression")) {
         header->insert(prop->name, StringAttribute(IDP_String(prop)));
       }
     }
@@ -811,7 +807,7 @@ static void imb_exr_get_views(MultiPartInputFile &file, StringVector &views)
   }
 }
 
-/* Multilayer Blender files have the view name in all the passes (even the default view one) */
+/* Multi-layer Blender files have the view name in all the passes (even the default view one). */
 static void imb_exr_insert_view_name(char *name_full, const char *passname, const char *viewname)
 {
   BLI_assert(!ELEM(name_full, passname, viewname));
@@ -1493,7 +1489,7 @@ static int imb_exr_split_channel_name(ExrChannel *echan, char *layname, char *pa
        * like, MX or NZ, which is basically has structure of
        *   <pass_prefix><component>
        *
-       * This is a bit silly, but see file from T35658.
+       * This is a bit silly, but see file from #35658.
        *
        * Here we do some magic to distinguish such cases.
        */
@@ -2215,8 +2211,8 @@ struct ImBuf *imb_load_filepath_thumbnail_openexr(const char *filepath,
 
     float scale_factor = MIN2(float(max_thumb_size) / float(source_w),
                               float(max_thumb_size) / float(source_h));
-    int dest_w = int(source_w * scale_factor);
-    int dest_h = int(source_h * scale_factor);
+    int dest_w = MAX2(int(source_w * scale_factor), 1);
+    int dest_h = MAX2(int(source_h * scale_factor), 1);
 
     struct ImBuf *ibuf = IMB_allocImBuf(dest_w, dest_h, 32, IB_rectfloat);
 

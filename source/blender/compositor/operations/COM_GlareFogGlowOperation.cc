@@ -130,7 +130,7 @@ static void FHT2D(fREAL *data, uint Mx, uint My, uint nzp, uint inverse)
     for (j = 0; j < Ny; j++) {
       for (i = j + 1; i < Nx; i++) {
         uint op = i + (j << Mx), np = j + (i << My);
-        SWAP(fREAL, data[op], data[np]);
+        std::swap(data[op], data[np]);
       }
     }
   }
@@ -145,15 +145,15 @@ static void FHT2D(fREAL *data, uint Mx, uint My, uint nzp, uint inverse)
         continue;
       }
       for (k = i, j = PRED(i); j != i; k = j, j = PRED(j), stm--) {
-        SWAP(fREAL, data[j], data[k]);
+        std::swap(data[j], data[k]);
       }
 #undef PRED
       stm--;
     }
   }
 
-  SWAP(uint, Nx, Ny);
-  SWAP(uint, Mx, My);
+  std::swap(Nx, Ny);
+  std::swap(Mx, My);
 
   /* Now columns == transposed rows. */
   for (j = 0; j < Ny; j++) {
@@ -269,7 +269,7 @@ static void convolve(float *dst, MemoryBuffer *in1, MemoryBuffer *in2)
   data1 = (fREAL *)MEM_callocN(3 * w2 * h2 * sizeof(fREAL), "convolve_fast FHT data1");
   data2 = (fREAL *)MEM_callocN(w2 * h2 * sizeof(fREAL), "convolve_fast FHT data2");
 
-  /* Normalize convolutor. */
+  /* Normalize convolution. */
   wt[0] = wt[1] = wt[2] = 0.0f;
   for (y = 0; y < kernel_height; y++) {
     colp = (fRGB *)&kernel_buffer[y * kernel_width * COM_DATA_TYPE_COLOR_CHANNELS];

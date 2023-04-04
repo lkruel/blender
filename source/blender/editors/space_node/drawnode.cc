@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2005 Blender Foundation. All rights reserved. */
+ * Copyright 2005 Blender Foundation */
 
 /** \file
  * \ingroup spnode
@@ -232,7 +232,7 @@ NodeResizeDirection node_get_resize_direction(const bNode *node, const int x, co
 
     NodeResizeDirection dir = NODE_RESIZE_NONE;
 
-    const rctf &totr = node->totr;
+    const rctf &totr = node->runtime->totr;
     const float size = NODE_RESIZE_MARGIN;
 
     if (x > totr.xmax - size && x <= totr.xmax && y >= totr.ymin && y < totr.ymax) {
@@ -253,8 +253,8 @@ NodeResizeDirection node_get_resize_direction(const bNode *node, const int x, co
 
   if (node->flag & NODE_HIDDEN) {
     /* right part of node */
-    rctf totr = node->totr;
-    totr.xmin = node->totr.xmax - 1.0f * U.widget_unit;
+    rctf totr = node->runtime->totr;
+    totr.xmin = node->runtime->totr.xmax - 1.0f * U.widget_unit;
     if (BLI_rctf_isect_pt(&totr, x, y)) {
       return NODE_RESIZE_RIGHT;
     }
@@ -263,7 +263,7 @@ NodeResizeDirection node_get_resize_direction(const bNode *node, const int x, co
   }
 
   const float size = NODE_RESIZE_MARGIN;
-  const rctf &totr = node->totr;
+  const rctf &totr = node->runtime->totr;
   NodeResizeDirection dir = NODE_RESIZE_NONE;
 
   if (x >= totr.xmax - size && x < totr.xmax && y >= totr.ymin && y < totr.ymax) {
@@ -1171,9 +1171,7 @@ void ED_node_init_butfuncs()
   NODE_TYPES_END;
 }
 
-void ED_init_custom_node_type(bNodeType * /*ntype*/)
-{
-}
+void ED_init_custom_node_type(bNodeType * /*ntype*/) {}
 
 void ED_init_custom_node_socket_type(bNodeSocketType *stype)
 {
@@ -1276,7 +1274,7 @@ static bool socket_needs_attribute_search(bNode &node, bNodeSocket &socket)
     return false;
   }
   const int socket_index = BLI_findindex(&node.inputs, &socket);
-  return node.runtime->declaration->inputs()[socket_index]->is_attribute_name();
+  return node.declaration()->inputs[socket_index]->is_attribute_name;
 }
 
 static void std_node_socket_draw(
@@ -1293,7 +1291,8 @@ static void std_node_socket_draw(
     return;
   }
 
-  if ((sock->in_out == SOCK_OUT) || (sock->flag & SOCK_IN_USE) || (sock->flag & SOCK_HIDE_VALUE)) {
+  if ((sock->in_out == SOCK_OUT) || (sock->flag & SOCK_IS_LINKED) ||
+      (sock->flag & SOCK_HIDE_VALUE)) {
     node_socket_button_label(C, layout, ptr, node_ptr, text);
     return;
   }
@@ -1455,6 +1454,7 @@ static void std_node_socket_interface_draw(bContext * /*C*/, uiLayout *layout, P
     case SOCK_STRING:
     case SOCK_OBJECT:
     case SOCK_COLLECTION:
+    case SOCK_IMAGE:
     case SOCK_TEXTURE:
     case SOCK_MATERIAL: {
       uiItemR(col, ptr, "default_value", DEFAULT_FLAGS, IFACE_("Default"), 0);
@@ -1462,7 +1462,13 @@ static void std_node_socket_interface_draw(bContext * /*C*/, uiLayout *layout, P
     }
   }
 
-  uiItemR(layout, ptr, "hide_value", DEFAULT_FLAGS, nullptr, 0);
+  col = uiLayoutColumn(layout, false);
+  uiItemR(col, ptr, "hide_value", DEFAULT_FLAGS, nullptr, 0);
+
+  const bNodeTree *node_tree = reinterpret_cast<const bNodeTree *>(ptr->owner_id);
+  if (sock->in_out == SOCK_IN && node_tree->type == NTREE_GEOMETRY) {
+    uiItemR(col, ptr, "hide_in_modifier", DEFAULT_FLAGS, nullptr, 0);
+  }
 }
 
 static void node_socket_virtual_draw_color(bContext * /*C*/,
@@ -1539,8 +1545,10 @@ void draw_nodespace_back_pix(const bContext &C,
   if (ibuf) {
     /* somehow the offset has to be calculated inverse */
     wmOrtho2_region_pixelspace(&region);
-    const float x = (region.winx - snode.zoom * ibuf->x) / 2 + snode.xof;
-    const float y = (region.winy - snode.zoom * ibuf->y) / 2 + snode.yof;
+    const float offset_x = snode.xof + ima->offset_x * snode.zoom;
+    const float offset_y = snode.yof + ima->offset_y * snode.zoom;
+    const float x = (region.winx - snode.zoom * ibuf->x) / 2 + offset_x;
+    const float y = (region.winy - snode.zoom * ibuf->y) / 2 + offset_y;
 
     /** \note draw selected info on backdrop */
     if (snode.edittree) {
@@ -1585,10 +1593,10 @@ static float2 socket_link_connection_location(const bNode &node,
                                               const bNodeSocket &socket,
                                               const bNodeLink &link)
 {
-  const float2 socket_location(socket.locx, socket.locy);
+  const float2 socket_location = socket.runtime->location;
   if (socket.is_multi_input() && socket.is_input() && !(node.flag & NODE_HIDDEN)) {
     return node_link_calculate_multi_input_position(
-        socket_location, link.multi_input_socket_index, socket.total_inputs);
+        socket_location, link.multi_input_socket_index, socket.runtime->total_inputs);
   }
   return socket_location;
 }
@@ -1663,8 +1671,8 @@ void node_link_bezier_points_evaluated(const bNodeLink &link,
 
 #define NODELINK_GROUP_SIZE 256
 #define LINK_RESOL 24
-#define LINK_WIDTH (2.5f * UI_DPI_FAC)
-#define ARROW_SIZE (7 * UI_DPI_FAC)
+#define LINK_WIDTH (2.5f * UI_SCALE_FAC)
+#define ARROW_SIZE (7 * UI_SCALE_FAC)
 
 /* Reroute arrow shape and mute bar. These are expanded here and shrunk in the glsl code.
  * See: gpu_shader_2D_nodelink_vert.glsl */
@@ -2027,6 +2035,8 @@ static NodeLinkDrawConfig nodelink_get_draw_config(const bContext &C,
   draw_config.th_col2 = th_col2;
   draw_config.th_col3 = th_col3;
 
+  const bNodeTree &node_tree = *snode.edittree;
+
   draw_config.dim_factor = selected ? 1.0f : node_link_dim_factor(v2d, link);
 
   bTheme *btheme = UI_GetTheme();
@@ -2049,24 +2059,21 @@ static NodeLinkDrawConfig nodelink_get_draw_config(const bContext &C,
   if (snode.overlay.flag & SN_OVERLAY_SHOW_OVERLAYS &&
       snode.overlay.flag & SN_OVERLAY_SHOW_WIRE_COLORS) {
     PointerRNA from_node_ptr, to_node_ptr;
-    RNA_pointer_create((ID *)snode.edittree, &RNA_Node, link.fromnode, &from_node_ptr);
-    RNA_pointer_create((ID *)snode.edittree, &RNA_Node, link.tonode, &to_node_ptr);
+    RNA_pointer_create((ID *)&node_tree, &RNA_Node, link.fromnode, &from_node_ptr);
+    RNA_pointer_create((ID *)&node_tree, &RNA_Node, link.tonode, &to_node_ptr);
 
     if (link.fromsock) {
-      node_socket_color_get(
-          C, *snode.edittree, from_node_ptr, *link.fromsock, draw_config.start_color);
+      node_socket_color_get(C, node_tree, from_node_ptr, *link.fromsock, draw_config.start_color);
     }
     else {
-      node_socket_color_get(
-          C, *snode.edittree, to_node_ptr, *link.tosock, draw_config.start_color);
+      node_socket_color_get(C, node_tree, to_node_ptr, *link.tosock, draw_config.start_color);
     }
 
     if (link.tosock) {
-      node_socket_color_get(C, *snode.edittree, to_node_ptr, *link.tosock, draw_config.end_color);
+      node_socket_color_get(C, node_tree, to_node_ptr, *link.tosock, draw_config.end_color);
     }
     else {
-      node_socket_color_get(
-          C, *snode.edittree, from_node_ptr, *link.fromsock, draw_config.end_color);
+      node_socket_color_get(C, node_tree, from_node_ptr, *link.fromsock, draw_config.end_color);
     }
   }
   else {
@@ -2199,7 +2206,7 @@ void node_draw_link(const bContext &C,
   }
 
   /* Links from field to non-field sockets are not allowed. */
-  if (snode.edittree->type == NTREE_GEOMETRY && !(link.flag & NODE_LINK_DRAGGED)) {
+  if (snode.edittree->type == NTREE_GEOMETRY) {
     if ((link.fromsock && link.fromsock->display_shape == SOCK_DISPLAY_SHAPE_DIAMOND) &&
         (link.tosock && link.tosock->display_shape == SOCK_DISPLAY_SHAPE_CIRCLE)) {
       th_col1 = th_col2 = th_col3 = TH_REDALERT;
@@ -2212,7 +2219,7 @@ void node_draw_link(const bContext &C,
 static std::array<float2, 4> node_link_bezier_points_dragged(const SpaceNode &snode,
                                                              const bNodeLink &link)
 {
-  const float2 cursor = snode.runtime->cursor * UI_DPI_FAC;
+  const float2 cursor = snode.runtime->cursor * UI_SCALE_FAC;
   std::array<float2, 4> points;
   points[0] = link.fromsock ?
                   socket_link_connection_location(*link.fromnode, *link.fromsock, link) :

@@ -7,6 +7,8 @@
 
 #pragma once
 
+namespace blender::draw::image_engine {
+
 struct ShaderParameters;
 
 /**
@@ -59,16 +61,6 @@ class AbstractSpaceAccessor {
   virtual void get_shader_parameters(ShaderParameters &r_shader_parameters,
                                      ImBuf *image_buffer) = 0;
 
-  /**
-   * Retrieve the gpu textures to draw.
-   */
-  virtual void get_gpu_textures(Image *image,
-                                ImageUser *iuser,
-                                ImBuf *image_buffer,
-                                GPUTexture **r_gpu_texture,
-                                bool *r_owns_texture,
-                                GPUTexture **r_tex_tile_data) = 0;
-
   /** \brief Is (wrap) repeat option enabled in the space. */
   virtual bool use_tile_drawing() const = 0;
 
@@ -77,7 +69,9 @@ class AbstractSpaceAccessor {
    * (0..1) to texture space UV coordinates.
    */
   virtual void init_ss_to_texture_matrix(const ARegion *region,
+                                         const float image_offset[2],
                                          const float image_resolution[2],
                                          float r_uv_to_texture[4][4]) const = 0;
+};
 
-};  // namespace blender::draw::image_engine
+}  // namespace blender::draw::image_engine

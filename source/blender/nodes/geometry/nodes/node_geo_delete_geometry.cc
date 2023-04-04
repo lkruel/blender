@@ -14,7 +14,7 @@
 #include "BKE_curves.hh"
 #include "BKE_customdata.h"
 #include "BKE_instances.hh"
-#include "BKE_mesh.h"
+#include "BKE_mesh.hh"
 #include "BKE_pointcloud.h"
 
 #include "node_geometry_util.hh"
@@ -28,12 +28,14 @@ static void copy_data_based_on_map(const Span<T> src,
                                    const Span<int> index_map,
                                    MutableSpan<T> dst)
 {
-  for (const int i_src : index_map.index_range()) {
-    const int i_dst = index_map[i_src];
-    if (i_dst != -1) {
-      dst[i_dst] = src[i_src];
+  threading::parallel_for(index_map.index_range(), 1024, [&](const IndexRange range) {
+    for (const int i_src : range) {
+      const int i_dst = index_map[i_src];
+      if (i_dst != -1) {
+        dst[i_dst] = src[i_src];
+      }
     }
-  }
+  });
 }
 
 /**
@@ -153,36 +155,21 @@ static void copy_face_corner_attributes(const Map<AttributeIDRef, AttributeKind>
       attributes, src_attributes, dst_attributes, ATTR_DOMAIN_CORNER, IndexMask(indices));
 }
 
-static void copy_masked_verts_to_new_mesh(const Mesh &src_mesh,
-                                          Mesh &dst_mesh,
-                                          Span<int> vertex_map)
-{
-  BLI_assert(src_mesh.totvert == vertex_map.size());
-  const Span<MVert> src_verts = src_mesh.verts();
-  MutableSpan<MVert> dst_verts = dst_mesh.verts_for_write();
-
-  for (const int i_src : vertex_map.index_range()) {
-    const int i_dst = vertex_map[i_src];
-    if (i_dst == -1) {
-      continue;
-    }
-    dst_verts[i_dst] = src_verts[i_src];
-  }
-}
-
 static void copy_masked_edges_to_new_mesh(const Mesh &src_mesh, Mesh &dst_mesh, Span<int> edge_map)
 {
   BLI_assert(src_mesh.totedge == edge_map.size());
   const Span<MEdge> src_edges = src_mesh.edges();
   MutableSpan<MEdge> dst_edges = dst_mesh.edges_for_write();
 
-  for (const int i_src : IndexRange(src_mesh.totedge)) {
-    const int i_dst = edge_map[i_src];
-    if (ELEM(i_dst, -1, -2)) {
-      continue;
+  threading::parallel_for(src_edges.index_range(), 1024, [&](const IndexRange range) {
+    for (const int i_src : range) {
+      const int i_dst = edge_map[i_src];
+      if (ELEM(i_dst, -1, -2)) {
+        continue;
+      }
+      dst_edges[i_dst] = src_edges[i_src];
     }
-    dst_edges[i_dst] = src_edges[i_src];
-  }
+  });
 }
 
 static void copy_masked_edges_to_new_mesh(const Mesh &src_mesh,
@@ -195,18 +182,20 @@ static void copy_masked_edges_to_new_mesh(const Mesh &src_mesh,
   const Span<MEdge> src_edges = src_mesh.edges();
   MutableSpan<MEdge> dst_edges = dst_mesh.edges_for_write();
 
-  for (const int i_src : IndexRange(src_mesh.totedge)) {
-    const int i_dst = edge_map[i_src];
-    if (i_dst == -1) {
-      continue;
-    }
-    const MEdge &e_src = src_edges[i_src];
-    MEdge &e_dst = dst_edges[i_dst];
+  threading::parallel_for(src_edges.index_range(), 1024, [&](const IndexRange range) {
+    for (const int i_src : range) {
+      const int i_dst = edge_map[i_src];
+      if (i_dst == -1) {
+        continue;
+      }
+      const MEdge &e_src = src_edges[i_src];
+      MEdge &e_dst = dst_edges[i_dst];
 
-    e_dst = e_src;
-    e_dst.v1 = vertex_map[e_src.v1];
-    e_dst.v2 = vertex_map[e_src.v2];
-  }
+      e_dst = e_src;
+      e_dst.v1 = vertex_map[e_src.v1];
+      e_dst.v2 = vertex_map[e_src.v2];
+    }
+  });
 }
 
 /* Faces and edges changed but vertices are the same. */
@@ -217,28 +206,33 @@ static void copy_masked_polys_to_new_mesh(const Mesh &src_mesh,
                                           Span<int> new_loop_starts)
 {
   const Span<MPoly> src_polys = src_mesh.polys();
-  const Span<MLoop> src_loops = src_mesh.loops();
+  const Span<int> src_corner_verts = src_mesh.corner_verts();
+  const Span<int> src_corner_edges = src_mesh.corner_edges();
   MutableSpan<MPoly> dst_polys = dst_mesh.polys_for_write();
-  MutableSpan<MLoop> dst_loops = dst_mesh.loops_for_write();
+  MutableSpan<int> dst_corner_verts = dst_mesh.corner_verts_for_write();
+  MutableSpan<int> dst_corner_edges = dst_mesh.corner_edges_for_write();
 
-  for (const int i_dst : masked_poly_indices.index_range()) {
-    const int i_src = masked_poly_indices[i_dst];
+  threading::parallel_for(masked_poly_indices.index_range(), 512, [&](const IndexRange range) {
+    for (const int i_dst : range) {
+      const int i_src = masked_poly_indices[i_dst];
+      const MPoly &mp_src = src_polys[i_src];
+      const int size = mp_src.totloop;
+      const Span<int> src_poly_verts = src_corner_verts.slice(mp_src.loopstart, size);
+      const Span<int> src_poly_edges = src_corner_edges.slice(mp_src.loopstart, size);
 
-    const MPoly &mp_src = src_polys[i_src];
-    MPoly &mp_dst = dst_polys[i_dst];
-    const int i_ml_src = mp_src.loopstart;
-    const int i_ml_dst = new_loop_starts[i_dst];
+      MPoly &mp_dst = dst_polys[i_dst];
+      mp_dst = mp_src;
+      mp_dst.loopstart = new_loop_starts[i_dst];
+      MutableSpan<int> dst_poly_verts = dst_corner_verts.slice(mp_dst.loopstart, size);
+      MutableSpan<int> dst_poly_edges = dst_corner_edges.slice(mp_dst.loopstart, size);
 
-    const MLoop *ml_src = &src_loops[i_ml_src];
-    MLoop *ml_dst = &dst_loops[i_ml_dst];
+      dst_poly_verts.copy_from(src_poly_verts);
 
-    mp_dst = mp_src;
-    mp_dst.loopstart = i_ml_dst;
-    for (int i : IndexRange(mp_src.totloop)) {
-      ml_dst[i].v = ml_src[i].v;
-      ml_dst[i].e = edge_map[ml_src[i].e];
+      for (const int i : IndexRange(size)) {
+        dst_poly_edges[i] = edge_map[src_poly_edges[i]];
+      }
     }
-  }
+  });
 }
 
 /* Only faces changed. */
@@ -248,28 +242,30 @@ static void copy_masked_polys_to_new_mesh(const Mesh &src_mesh,
                                           Span<int> new_loop_starts)
 {
   const Span<MPoly> src_polys = src_mesh.polys();
-  const Span<MLoop> src_loops = src_mesh.loops();
+  const Span<int> src_corner_verts = src_mesh.corner_verts();
+  const Span<int> src_corner_edges = src_mesh.corner_edges();
   MutableSpan<MPoly> dst_polys = dst_mesh.polys_for_write();
-  MutableSpan<MLoop> dst_loops = dst_mesh.loops_for_write();
+  MutableSpan<int> dst_corner_verts = dst_mesh.corner_verts_for_write();
+  MutableSpan<int> dst_corner_edges = dst_mesh.corner_edges_for_write();
 
-  for (const int i_dst : masked_poly_indices.index_range()) {
-    const int i_src = masked_poly_indices[i_dst];
+  threading::parallel_for(masked_poly_indices.index_range(), 512, [&](const IndexRange range) {
+    for (const int i_dst : range) {
+      const int i_src = masked_poly_indices[i_dst];
+      const MPoly &mp_src = src_polys[i_src];
+      const int size = mp_src.totloop;
+      const Span<int> src_poly_verts = src_corner_verts.slice(mp_src.loopstart, size);
+      const Span<int> src_poly_edges = src_corner_edges.slice(mp_src.loopstart, size);
 
-    const MPoly &mp_src = src_polys[i_src];
-    MPoly &mp_dst = dst_polys[i_dst];
-    const int i_ml_src = mp_src.loopstart;
-    const int i_ml_dst = new_loop_starts[i_dst];
+      MPoly &mp_dst = dst_polys[i_dst];
+      mp_dst = mp_src;
+      mp_dst.loopstart = new_loop_starts[i_dst];
+      MutableSpan<int> dst_poly_verts = dst_corner_verts.slice(mp_dst.loopstart, size);
+      MutableSpan<int> dst_poly_edges = dst_corner_edges.slice(mp_dst.loopstart, size);
 
-    const MLoop *ml_src = &src_loops[i_ml_src];
-    MLoop *ml_dst = &dst_loops[i_ml_dst];
-
-    mp_dst = mp_src;
-    mp_dst.loopstart = i_ml_dst;
-    for (int i : IndexRange(mp_src.totloop)) {
-      ml_dst[i].v = ml_src[i].v;
-      ml_dst[i].e = ml_src[i].e;
+      dst_poly_verts.copy_from(src_poly_verts);
+      dst_poly_edges.copy_from(src_poly_edges);
     }
-  }
+  });
 }
 
 static void copy_masked_polys_to_new_mesh(const Mesh &src_mesh,
@@ -280,36 +276,43 @@ static void copy_masked_polys_to_new_mesh(const Mesh &src_mesh,
                                           Span<int> new_loop_starts)
 {
   const Span<MPoly> src_polys = src_mesh.polys();
-  const Span<MLoop> src_loops = src_mesh.loops();
+  const Span<int> src_corner_verts = src_mesh.corner_verts();
+  const Span<int> src_corner_edges = src_mesh.corner_edges();
   MutableSpan<MPoly> dst_polys = dst_mesh.polys_for_write();
-  MutableSpan<MLoop> dst_loops = dst_mesh.loops_for_write();
+  MutableSpan<int> dst_corner_verts = dst_mesh.corner_verts_for_write();
+  MutableSpan<int> dst_corner_edges = dst_mesh.corner_edges_for_write();
 
-  for (const int i_dst : masked_poly_indices.index_range()) {
-    const int i_src = masked_poly_indices[i_dst];
+  threading::parallel_for(masked_poly_indices.index_range(), 512, [&](const IndexRange range) {
+    for (const int i_dst : range) {
+      const int i_src = masked_poly_indices[i_dst];
+      const MPoly &mp_src = src_polys[i_src];
+      const int size = mp_src.totloop;
+      const Span<int> src_poly_verts = src_corner_verts.slice(mp_src.loopstart, size);
+      const Span<int> src_poly_edges = src_corner_edges.slice(mp_src.loopstart, size);
 
-    const MPoly &mp_src = src_polys[i_src];
-    MPoly &mp_dst = dst_polys[i_dst];
-    const int i_ml_src = mp_src.loopstart;
-    const int i_ml_dst = new_loop_starts[i_dst];
+      MPoly &mp_dst = dst_polys[i_dst];
+      mp_dst = mp_src;
+      mp_dst.loopstart = new_loop_starts[i_dst];
+      MutableSpan<int> dst_poly_verts = dst_corner_verts.slice(mp_dst.loopstart, size);
+      MutableSpan<int> dst_poly_edges = dst_corner_edges.slice(mp_dst.loopstart, size);
 
-    const MLoop *ml_src = &src_loops[i_ml_src];
-    MLoop *ml_dst = &dst_loops[i_ml_dst];
-
-    mp_dst = mp_src;
-    mp_dst.loopstart = i_ml_dst;
-    for (int i : IndexRange(mp_src.totloop)) {
-      ml_dst[i].v = vertex_map[ml_src[i].v];
-      ml_dst[i].e = edge_map[ml_src[i].e];
+      for (const int i : IndexRange(size)) {
+        dst_poly_verts[i] = vertex_map[src_poly_verts[i]];
+      }
+      for (const int i : IndexRange(size)) {
+        dst_poly_edges[i] = edge_map[src_poly_edges[i]];
+      }
     }
-  }
+  });
 }
 
 static void delete_curves_selection(GeometrySet &geometry_set,
                                     const Field<bool> &selection_field,
-                                    const eAttrDomain selection_domain)
+                                    const eAttrDomain selection_domain,
+                                    const bke::AnonymousAttributePropagationInfo &propagation_info)
 {
   const Curves &src_curves_id = *geometry_set.get_curves_for_read();
-  const bke::CurvesGeometry &src_curves = bke::CurvesGeometry::wrap(src_curves_id.geometry);
+  const bke::CurvesGeometry &src_curves = src_curves_id.geometry.wrap();
 
   const int domain_size = src_curves.attributes().domain_size(selection_domain);
   bke::CurvesFieldContext field_context{src_curves, selection_domain};
@@ -327,18 +330,20 @@ static void delete_curves_selection(GeometrySet &geometry_set,
 
   CurveComponent &component = geometry_set.get_component_for_write<CurveComponent>();
   Curves &curves_id = *component.get_for_write();
-  bke::CurvesGeometry &curves = bke::CurvesGeometry::wrap(curves_id.geometry);
+  bke::CurvesGeometry &curves = curves_id.geometry.wrap();
 
   if (selection_domain == ATTR_DOMAIN_POINT) {
-    curves.remove_points(selection);
+    curves.remove_points(selection, propagation_info);
   }
   else if (selection_domain == ATTR_DOMAIN_CURVE) {
-    curves.remove_curves(selection);
+    curves.remove_curves(selection, propagation_info);
   }
 }
 
-static void separate_point_cloud_selection(GeometrySet &geometry_set,
-                                           const Field<bool> &selection_field)
+static void separate_point_cloud_selection(
+    GeometrySet &geometry_set,
+    const Field<bool> &selection_field,
+    const AnonymousAttributePropagationInfo &propagation_info)
 {
   const PointCloud &src_pointcloud = *geometry_set.get_pointcloud_for_read();
 
@@ -355,8 +360,11 @@ static void separate_point_cloud_selection(GeometrySet &geometry_set,
   PointCloud *pointcloud = BKE_pointcloud_new_nomain(selection.size());
 
   Map<AttributeIDRef, AttributeKind> attributes;
-  geometry_set.gather_attributes_for_propagation(
-      {GEO_COMPONENT_TYPE_POINT_CLOUD}, GEO_COMPONENT_TYPE_POINT_CLOUD, false, attributes);
+  geometry_set.gather_attributes_for_propagation({GEO_COMPONENT_TYPE_POINT_CLOUD},
+                                                 GEO_COMPONENT_TYPE_POINT_CLOUD,
+                                                 false,
+                                                 propagation_info,
+                                                 attributes);
 
   copy_attributes_based_on_mask(attributes,
                                 src_pointcloud.attributes(),
@@ -367,7 +375,8 @@ static void separate_point_cloud_selection(GeometrySet &geometry_set,
 }
 
 static void delete_selected_instances(GeometrySet &geometry_set,
-                                      const Field<bool> &selection_field)
+                                      const Field<bool> &selection_field,
+                                      const AnonymousAttributePropagationInfo &propagation_info)
 {
   bke::Instances &instances = *geometry_set.get_instances_for_write();
   bke::InstancesFieldContext field_context{instances};
@@ -381,7 +390,7 @@ static void delete_selected_instances(GeometrySet &geometry_set,
     return;
   }
 
-  instances.remove(selection);
+  instances.remove(selection, propagation_info);
 }
 
 static void compute_selected_verts_from_vertex_selection(const Span<bool> vertex_selection,
@@ -438,7 +447,7 @@ static void compute_selected_polys_from_vertex_selection(const Mesh &mesh,
 {
   BLI_assert(mesh.totvert == vertex_selection.size());
   const Span<MPoly> polys = mesh.polys();
-  const Span<MLoop> loops = mesh.loops();
+  const Span<int> corner_verts = mesh.corner_verts();
 
   r_selected_poly_indices.reserve(mesh.totpoly);
   r_loop_starts.reserve(mesh.totloop);
@@ -448,9 +457,8 @@ static void compute_selected_polys_from_vertex_selection(const Mesh &mesh,
     const MPoly &poly_src = polys[i];
 
     bool all_verts_in_selection = true;
-    const Span<MLoop> poly_loops = loops.slice(poly_src.loopstart, poly_src.totloop);
-    for (const MLoop &loop : poly_loops) {
-      if (!vertex_selection[loop.v]) {
+    for (const int vert : corner_verts.slice(poly_src.loopstart, poly_src.totloop)) {
+      if (!vertex_selection[vert]) {
         all_verts_in_selection = false;
         break;
       }
@@ -542,7 +550,7 @@ static void compute_selected_polys_from_edge_selection(const Mesh &mesh,
                                                        int *r_selected_loops_num)
 {
   const Span<MPoly> polys = mesh.polys();
-  const Span<MLoop> loops = mesh.loops();
+  const Span<int> corner_edges = mesh.corner_edges();
 
   r_selected_poly_indices.reserve(mesh.totpoly);
   r_loop_starts.reserve(mesh.totloop);
@@ -552,9 +560,8 @@ static void compute_selected_polys_from_edge_selection(const Mesh &mesh,
     const MPoly &poly_src = polys[i];
 
     bool all_edges_in_selection = true;
-    const Span<MLoop> poly_loops = loops.slice(poly_src.loopstart, poly_src.totloop);
-    for (const MLoop &loop : poly_loops) {
-      if (!edge_selection[loop.e]) {
+    for (const int edge : corner_edges.slice(poly_src.loopstart, poly_src.totloop)) {
+      if (!edge_selection[edge]) {
         all_edges_in_selection = false;
         break;
       }
@@ -584,16 +591,20 @@ static void compute_selected_mesh_data_from_vertex_selection_edge_face(
     int *r_selected_polys_num,
     int *r_selected_loops_num)
 {
-
-  compute_selected_edges_from_vertex_selection(
-      mesh, vertex_selection, r_edge_map, r_selected_edges_num);
-
-  compute_selected_polys_from_vertex_selection(mesh,
-                                               vertex_selection,
-                                               r_selected_poly_indices,
-                                               r_loop_starts,
-                                               r_selected_polys_num,
-                                               r_selected_loops_num);
+  threading::parallel_invoke(
+      mesh.totedge > 1000,
+      [&]() {
+        compute_selected_edges_from_vertex_selection(
+            mesh, vertex_selection, r_edge_map, r_selected_edges_num);
+      },
+      [&]() {
+        compute_selected_polys_from_vertex_selection(mesh,
+                                                     vertex_selection,
+                                                     r_selected_poly_indices,
+                                                     r_loop_starts,
+                                                     r_selected_polys_num,
+                                                     r_selected_loops_num);
+      });
 }
 
 /**
@@ -611,18 +622,24 @@ static void compute_selected_mesh_data_from_vertex_selection(const Mesh &mesh,
                                                              int *r_selected_polys_num,
                                                              int *r_selected_loops_num)
 {
-  compute_selected_verts_from_vertex_selection(
-      vertex_selection, r_vertex_map, r_selected_verts_num);
-
-  compute_selected_edges_from_vertex_selection(
-      mesh, vertex_selection, r_edge_map, r_selected_edges_num);
-
-  compute_selected_polys_from_vertex_selection(mesh,
-                                               vertex_selection,
-                                               r_selected_poly_indices,
-                                               r_loop_starts,
-                                               r_selected_polys_num,
-                                               r_selected_loops_num);
+  threading::parallel_invoke(
+      mesh.totedge > 1000,
+      [&]() {
+        compute_selected_verts_from_vertex_selection(
+            vertex_selection, r_vertex_map, r_selected_verts_num);
+      },
+      [&]() {
+        compute_selected_edges_from_vertex_selection(
+            mesh, vertex_selection, r_edge_map, r_selected_edges_num);
+      },
+      [&]() {
+        compute_selected_polys_from_vertex_selection(mesh,
+                                                     vertex_selection,
+                                                     r_selected_poly_indices,
+                                                     r_loop_starts,
+                                                     r_selected_polys_num,
+                                                     r_selected_loops_num);
+      });
 }
 
 /**
@@ -639,14 +656,20 @@ static void compute_selected_mesh_data_from_edge_selection_edge_face(
     int *r_selected_polys_num,
     int *r_selected_loops_num)
 {
-  compute_selected_edges_from_edge_selection(
-      mesh, edge_selection, r_edge_map, r_selected_edges_num);
-  compute_selected_polys_from_edge_selection(mesh,
-                                             edge_selection,
-                                             r_selected_poly_indices,
-                                             r_loop_starts,
-                                             r_selected_polys_num,
-                                             r_selected_loops_num);
+  threading::parallel_invoke(
+      mesh.totedge > 1000,
+      [&]() {
+        compute_selected_edges_from_edge_selection(
+            mesh, edge_selection, r_edge_map, r_selected_edges_num);
+      },
+      [&]() {
+        compute_selected_polys_from_edge_selection(mesh,
+                                                   edge_selection,
+                                                   r_selected_poly_indices,
+                                                   r_loop_starts,
+                                                   r_selected_polys_num,
+                                                   r_selected_loops_num);
+      });
 }
 
 /**
@@ -664,15 +687,25 @@ static void compute_selected_mesh_data_from_edge_selection(const Mesh &mesh,
                                                            int *r_selected_polys_num,
                                                            int *r_selected_loops_num)
 {
-  r_vertex_map.fill(-1);
-  compute_selected_verts_and_edges_from_edge_selection(
-      mesh, edge_selection, r_vertex_map, r_edge_map, r_selected_verts_num, r_selected_edges_num);
-  compute_selected_polys_from_edge_selection(mesh,
-                                             edge_selection,
-                                             r_selected_poly_indices,
-                                             r_loop_starts,
-                                             r_selected_polys_num,
-                                             r_selected_loops_num);
+  threading::parallel_invoke(
+      mesh.totedge > 1000,
+      [&]() {
+        r_vertex_map.fill(-1);
+        compute_selected_verts_and_edges_from_edge_selection(mesh,
+                                                             edge_selection,
+                                                             r_vertex_map,
+                                                             r_edge_map,
+                                                             r_selected_verts_num,
+                                                             r_selected_edges_num);
+      },
+      [&]() {
+        compute_selected_polys_from_edge_selection(mesh,
+                                                   edge_selection,
+                                                   r_selected_poly_indices,
+                                                   r_loop_starts,
+                                                   r_selected_polys_num,
+                                                   r_selected_loops_num);
+      });
 }
 
 /**
@@ -721,7 +754,7 @@ static void compute_selected_mesh_data_from_poly_selection_edge_face(
   BLI_assert(mesh.totpoly == poly_selection.size());
   BLI_assert(mesh.totedge == r_edge_map.size());
   const Span<MPoly> polys = mesh.polys();
-  const Span<MLoop> loops = mesh.loops();
+  const Span<int> corner_edges = mesh.corner_edges();
 
   r_edge_map.fill(-1);
 
@@ -739,11 +772,10 @@ static void compute_selected_mesh_data_from_poly_selection_edge_face(
       selected_loops_num += poly_src.totloop;
 
       /* Add the vertices and the edges. */
-      const Span<MLoop> poly_loops = loops.slice(poly_src.loopstart, poly_src.totloop);
-      for (const MLoop &loop : poly_loops) {
+      for (const int edge : corner_edges.slice(poly_src.loopstart, poly_src.totloop)) {
         /* Check first if it has not yet been added. */
-        if (r_edge_map[loop.e] == -1) {
-          r_edge_map[loop.e] = selected_edges_num;
+        if (r_edge_map[edge] == -1) {
+          r_edge_map[edge] = selected_edges_num;
           selected_edges_num++;
         }
       }
@@ -772,7 +804,8 @@ static void compute_selected_mesh_data_from_poly_selection(const Mesh &mesh,
   BLI_assert(mesh.totpoly == poly_selection.size());
   BLI_assert(mesh.totedge == r_edge_map.size());
   const Span<MPoly> polys = mesh.polys();
-  const Span<MLoop> loops = mesh.loops();
+  const Span<int> corner_verts = mesh.corner_verts();
+  const Span<int> corner_edges = mesh.corner_edges();
 
   r_vertex_map.fill(-1);
   r_edge_map.fill(-1);
@@ -792,15 +825,16 @@ static void compute_selected_mesh_data_from_poly_selection(const Mesh &mesh,
       selected_loops_num += poly_src.totloop;
 
       /* Add the vertices and the edges. */
-      const Span<MLoop> poly_loops = loops.slice(poly_src.loopstart, poly_src.totloop);
-      for (const MLoop &loop : poly_loops) {
+      for (const int corner : IndexRange(poly_src.loopstart, poly_src.totloop)) {
+        const int vert = corner_verts[corner];
+        const int edge = corner_edges[corner];
         /* Check first if it has not yet been added. */
-        if (r_vertex_map[loop.v] == -1) {
-          r_vertex_map[loop.v] = selected_verts_num;
+        if (r_vertex_map[vert] == -1) {
+          r_vertex_map[vert] = selected_verts_num;
           selected_verts_num++;
         }
-        if (r_edge_map[loop.e] == -1) {
-          r_edge_map[loop.e] = selected_edges_num;
+        if (r_edge_map[edge] == -1) {
+          r_edge_map[edge] = selected_edges_num;
           selected_edges_num++;
         }
       }
@@ -819,7 +853,8 @@ static void do_mesh_separation(GeometrySet &geometry_set,
                                const Mesh &mesh_in,
                                const Span<bool> selection,
                                const eAttrDomain domain,
-                               const GeometryNodeDeleteGeometryMode mode)
+                               const GeometryNodeDeleteGeometryMode mode,
+                               const AnonymousAttributePropagationInfo &propagation_info)
 {
   /* Needed in all cases. */
   Vector<int> selected_poly_indices;
@@ -831,7 +866,9 @@ static void do_mesh_separation(GeometrySet &geometry_set,
 
   Map<AttributeIDRef, AttributeKind> attributes;
   geometry_set.gather_attributes_for_propagation(
-      {GEO_COMPONENT_TYPE_MESH}, GEO_COMPONENT_TYPE_MESH, false, attributes);
+      {GEO_COMPONENT_TYPE_MESH}, GEO_COMPONENT_TYPE_MESH, false, propagation_info, attributes);
+  attributes.remove(".corner_vert");
+  attributes.remove(".corner_edge");
 
   switch (mode) {
     case GEO_NODE_DELETE_GEOMETRY_MODE_ALL: {
@@ -886,12 +923,10 @@ static void do_mesh_separation(GeometrySet &geometry_set,
       mesh_out = BKE_mesh_new_nomain_from_template(&mesh_in,
                                                    selected_verts_num,
                                                    selected_edges_num,
-                                                   0,
                                                    selected_loops_num,
                                                    selected_polys_num);
 
       /* Copy the selected parts of the mesh over to the new mesh. */
-      copy_masked_verts_to_new_mesh(mesh_in, *mesh_out, vertex_map);
       copy_masked_edges_to_new_mesh(mesh_in, *mesh_out, vertex_map, edge_map);
       copy_masked_polys_to_new_mesh(
           mesh_in, *mesh_out, vertex_map, edge_map, selected_poly_indices, new_loop_starts);
@@ -960,15 +995,10 @@ static void do_mesh_separation(GeometrySet &geometry_set,
           BLI_assert_unreachable();
           break;
       }
-      mesh_out = BKE_mesh_new_nomain_from_template(&mesh_in,
-                                                   mesh_in.totvert,
-                                                   selected_edges_num,
-                                                   0,
-                                                   selected_loops_num,
-                                                   selected_polys_num);
+      mesh_out = BKE_mesh_new_nomain_from_template(
+          &mesh_in, mesh_in.totvert, selected_edges_num, selected_loops_num, selected_polys_num);
 
       /* Copy the selected parts of the mesh over to the new mesh. */
-      mesh_out->verts_for_write().copy_from(mesh_in.verts());
       copy_masked_edges_to_new_mesh(mesh_in, *mesh_out, edge_map);
       copy_masked_polys_to_new_mesh(
           mesh_in, *mesh_out, edge_map, selected_poly_indices, new_loop_starts);
@@ -992,6 +1022,9 @@ static void do_mesh_separation(GeometrySet &geometry_set,
                                   selected_loops_num,
                                   selected_poly_indices,
                                   mesh_in);
+
+      /* Positions are not changed by the operation, so the bounds are the same. */
+      mesh_out->runtime->bounds_cache = mesh_in.runtime->bounds_cache;
       break;
     }
     case GEO_NODE_DELETE_GEOMETRY_MODE_ONLY_FACE: {
@@ -1026,10 +1059,9 @@ static void do_mesh_separation(GeometrySet &geometry_set,
           break;
       }
       mesh_out = BKE_mesh_new_nomain_from_template(
-          &mesh_in, mesh_in.totvert, mesh_in.totedge, 0, selected_loops_num, selected_polys_num);
+          &mesh_in, mesh_in.totvert, mesh_in.totedge, selected_loops_num, selected_polys_num);
 
       /* Copy the selected parts of the mesh over to the new mesh. */
-      mesh_out->verts_for_write().copy_from(mesh_in.verts());
       mesh_out->edges_for_write().copy_from(mesh_in.edges());
       copy_masked_polys_to_new_mesh(mesh_in, *mesh_out, selected_poly_indices, new_loop_starts);
 
@@ -1049,18 +1081,21 @@ static void do_mesh_separation(GeometrySet &geometry_set,
                                   selected_loops_num,
                                   selected_poly_indices,
                                   mesh_in);
+
+      /* Positions are not changed by the operation, so the bounds are the same. */
+      mesh_out->runtime->bounds_cache = mesh_in.runtime->bounds_cache;
       break;
     }
   }
 
-  BKE_mesh_calc_edges_loose(mesh_out);
   geometry_set.replace_mesh(mesh_out);
 }
 
 static void separate_mesh_selection(GeometrySet &geometry_set,
                                     const Field<bool> &selection_field,
                                     const eAttrDomain selection_domain,
-                                    const GeometryNodeDeleteGeometryMode mode)
+                                    const GeometryNodeDeleteGeometryMode mode,
+                                    const AnonymousAttributePropagationInfo &propagation_info)
 {
   const Mesh &src_mesh = *geometry_set.get_mesh_for_read();
   bke::MeshFieldContext field_context{src_mesh, selection_domain};
@@ -1075,7 +1110,8 @@ static void separate_mesh_selection(GeometrySet &geometry_set,
 
   const VArraySpan<bool> selection_span{selection};
 
-  do_mesh_separation(geometry_set, src_mesh, selection_span, selection_domain, mode);
+  do_mesh_separation(
+      geometry_set, src_mesh, selection_span, selection_domain, mode, propagation_info);
 }
 
 }  // namespace blender::nodes::node_geo_delete_geometry_cc
@@ -1086,6 +1122,7 @@ void separate_geometry(GeometrySet &geometry_set,
                        const eAttrDomain domain,
                        const GeometryNodeDeleteGeometryMode mode,
                        const Field<bool> &selection_field,
+                       const AnonymousAttributePropagationInfo &propagation_info,
                        bool &r_is_error)
 {
   namespace file_ns = blender::nodes::node_geo_delete_geometry_cc;
@@ -1093,26 +1130,27 @@ void separate_geometry(GeometrySet &geometry_set,
   bool some_valid_domain = false;
   if (geometry_set.has_pointcloud()) {
     if (domain == ATTR_DOMAIN_POINT) {
-      file_ns::separate_point_cloud_selection(geometry_set, selection_field);
+      file_ns::separate_point_cloud_selection(geometry_set, selection_field, propagation_info);
       some_valid_domain = true;
     }
   }
   if (geometry_set.has_mesh()) {
     if (ELEM(domain, ATTR_DOMAIN_POINT, ATTR_DOMAIN_EDGE, ATTR_DOMAIN_FACE, ATTR_DOMAIN_CORNER)) {
-      file_ns::separate_mesh_selection(geometry_set, selection_field, domain, mode);
+      file_ns::separate_mesh_selection(
+          geometry_set, selection_field, domain, mode, propagation_info);
       some_valid_domain = true;
     }
   }
   if (geometry_set.has_curves()) {
     if (ELEM(domain, ATTR_DOMAIN_POINT, ATTR_DOMAIN_CURVE)) {
       file_ns::delete_curves_selection(
-          geometry_set, fn::invert_boolean_field(selection_field), domain);
+          geometry_set, fn::invert_boolean_field(selection_field), domain, propagation_info);
       some_valid_domain = true;
     }
   }
   if (geometry_set.has_instances()) {
     if (domain == ATTR_DOMAIN_INSTANCE) {
-      file_ns::delete_selected_instances(geometry_set, selection_field);
+      file_ns::delete_selected_instances(geometry_set, selection_field, propagation_info);
       some_valid_domain = true;
     }
   }
@@ -1131,9 +1169,9 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Bool>(N_("Selection"))
       .default_value(true)
       .hide_value()
-      .supports_field()
+      .field_on_all()
       .description(N_("The parts of the geometry to be deleted"));
-  b.add_output<decl::Geometry>(N_("Geometry"));
+  b.add_output<decl::Geometry>(N_("Geometry")).propagate_all();
 }
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
@@ -1172,15 +1210,18 @@ static void node_geo_exec(GeoNodeExecParams params)
   const eAttrDomain domain = eAttrDomain(storage.domain);
   const GeometryNodeDeleteGeometryMode mode = (GeometryNodeDeleteGeometryMode)storage.mode;
 
+  const AnonymousAttributePropagationInfo &propagation_info = params.get_output_propagation_info(
+      "Geometry");
+
   if (domain == ATTR_DOMAIN_INSTANCE) {
     bool is_error;
-    separate_geometry(geometry_set, domain, mode, selection, is_error);
+    separate_geometry(geometry_set, domain, mode, selection, propagation_info, is_error);
   }
   else {
     geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
       bool is_error;
       /* Invert here because we want to keep the things not in the selection. */
-      separate_geometry(geometry_set, domain, mode, selection, is_error);
+      separate_geometry(geometry_set, domain, mode, selection, propagation_info, is_error);
     });
   }
 

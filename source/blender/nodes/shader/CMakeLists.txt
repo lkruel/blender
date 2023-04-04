@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright 2021 Blender Foundation. All rights reserved.
+# Copyright 2021 Blender Foundation
 
 set(INC
   .
@@ -120,9 +120,11 @@ set(SRC
   nodes/node_shader_wavelength.cc
   nodes/node_shader_wireframe.cc
 
+  node_shader_register.cc
   node_shader_tree.cc
   node_shader_util.cc
 
+  node_shader_register.hh
   node_shader_util.hh
 )
 

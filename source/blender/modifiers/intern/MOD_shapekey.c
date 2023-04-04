@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2005 Blender Foundation. All rights reserved. */
+ * Copyright 2005 Blender Foundation */
 
 /** \file
  * \ingroup modifiers
@@ -109,35 +109,35 @@ static void deformMatricesEM(ModifierData *UNUSED(md),
 }
 
 ModifierTypeInfo modifierType_ShapeKey = {
-    /* name */ N_("ShapeKey"),
-    /* structName */ "ShapeKeyModifierData",
-    /* structSize */ sizeof(ShapeKeyModifierData),
-    /* srna */ &RNA_Modifier,
-    /* type */ eModifierTypeType_OnlyDeform,
-    /* flags */ eModifierTypeFlag_AcceptsCVs | eModifierTypeFlag_AcceptsVertexCosOnly |
+    /*name*/ N_("ShapeKey"),
+    /*structName*/ "ShapeKeyModifierData",
+    /*structSize*/ sizeof(ShapeKeyModifierData),
+    /*srna*/ &RNA_Modifier,
+    /*type*/ eModifierTypeType_OnlyDeform,
+    /*flags*/ eModifierTypeFlag_AcceptsCVs | eModifierTypeFlag_AcceptsVertexCosOnly |
         eModifierTypeFlag_SupportsEditmode,
-    /* icon */ ICON_DOT,
+    /*icon*/ ICON_DOT,
 
-    /* copyData */ NULL,
+    /*copyData*/ NULL,
 
-    /* deformVerts */ deformVerts,
-    /* deformMatrices */ deformMatrices,
-    /* deformVertsEM */ deformVertsEM,
-    /* deformMatricesEM */ deformMatricesEM,
-    /* modifyMesh */ NULL,
-    /* modifyGeometrySet */ NULL,
+    /*deformVerts*/ deformVerts,
+    /*deformMatrices*/ deformMatrices,
+    /*deformVertsEM*/ deformVertsEM,
+    /*deformMatricesEM*/ deformMatricesEM,
+    /*modifyMesh*/ NULL,
+    /*modifyGeometrySet*/ NULL,
 
-    /* initData */ NULL,
-    /* requiredDataMask */ NULL,
-    /* freeData */ NULL,
-    /* isDisabled */ NULL,
-    /* updateDepsgraph */ NULL,
-    /* dependsOnTime */ NULL,
-    /* dependsOnNormals */ NULL,
-    /* foreachIDLink */ NULL,
-    /* foreachTexLink */ NULL,
-    /* freeRuntimeData */ NULL,
-    /* panelRegister */ NULL,
-    /* blendWrite */ NULL,
-    /* blendRead */ NULL,
+    /*initData*/ NULL,
+    /*requiredDataMask*/ NULL,
+    /*freeData*/ NULL,
+    /*isDisabled*/ NULL,
+    /*updateDepsgraph*/ NULL,
+    /*dependsOnTime*/ NULL,
+    /*dependsOnNormals*/ NULL,
+    /*foreachIDLink*/ NULL,
+    /*foreachTexLink*/ NULL,
+    /*freeRuntimeData*/ NULL,
+    /*panelRegister*/ NULL,
+    /*blendWrite*/ NULL,
+    /*blendRead*/ NULL,
 };

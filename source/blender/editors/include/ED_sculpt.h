@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2008 Blender Foundation. All rights reserved. */
+ * Copyright 2008 Blender Foundation */
 
 /** \file
  * \ingroup editors
@@ -17,12 +17,10 @@ struct UndoType;
 struct ViewContext;
 struct bContext;
 struct rcti;
-struct wmMsgSubscribeKey;
-struct wmMsgSubscribeValue;
-struct wmRegionMessageSubscribeParams;
 struct wmOperator;
+struct wmKeyConfig;
 
-/* sculpt.c */
+/* sculpt.cc */
 
 void ED_operatortypes_sculpt(void);
 void ED_sculpt_redraw_planes_get(float planes[4][4], struct ARegion *region, struct Object *ob);
@@ -31,7 +29,8 @@ bool ED_sculpt_mask_box_select(struct bContext *C,
                                const struct rcti *rect,
                                bool select);
 
-/* sculpt_transform.c */
+void ED_keymap_sculpt(wmKeyConfig *keyconf);
+/* sculpt_transform.cc */
 
 void ED_sculpt_update_modal_transform(struct bContext *C, struct Object *ob);
 void ED_sculpt_init_transform(struct bContext *C,
@@ -40,7 +39,7 @@ void ED_sculpt_init_transform(struct bContext *C,
                               const char *undo_name);
 void ED_sculpt_end_transform(struct bContext *C, struct Object *ob);
 
-/* sculpt_undo.c */
+/* sculpt_undo.cc */
 
 /** Export for ED_undo_sys. */
 void ED_sculpt_undosys_type(struct UndoType *ut);

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright 2020 Blender Foundation. All rights reserved.
+# Copyright 2020 Blender Foundation
 
 if(WITH_GTESTS)
   set(TEST_SRC
@@ -22,5 +22,5 @@ if(WITH_GTESTS)
     set(TEST_LIB ${TEST_LIB} ${OPENJPEG_LIBRARIES})
   endif()
   include(GTestTesting)
-  blender_add_test_executable(ffmpeg "${TEST_SRC}" "${TEST_INC}" "${TEST_INC_SYS}" "${TEST_LIB}")
+  blender_add_test_lib(ffmpeg_codecs "${TEST_SRC}" "${TEST_INC}" "${TEST_INC_SYS}" "${TEST_LIB}")
 endif()

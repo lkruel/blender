@@ -1,4 +1,4 @@
-// Copyright 2021 Blender Foundation. All rights reserved.
+// Copyright 2021 Blender Foundation
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -89,27 +89,17 @@ class EvalOutputAPI::EvalOutput {
   // The following interfaces are dependant on the actual evaluator type (CPU, OpenGL, etc.) which
   // have slightly different APIs to access patch arrays, as well as different types for their
   // data structure. They need to be overridden in the specific instances of the EvalOutput derived
-  // classes if needed, while the interfaces above are overriden through VolatileEvalOutput.
+  // classes if needed, while the interfaces above are overridden through VolatileEvalOutput.
 
-  virtual void fillPatchArraysBuffer(OpenSubdiv_Buffer * /*patch_arrays_buffer*/)
-  {
-  }
+  virtual void fillPatchArraysBuffer(OpenSubdiv_Buffer * /*patch_arrays_buffer*/) {}
 
-  virtual void wrapPatchIndexBuffer(OpenSubdiv_Buffer * /*patch_index_buffer*/)
-  {
-  }
+  virtual void wrapPatchIndexBuffer(OpenSubdiv_Buffer * /*patch_index_buffer*/) {}
 
-  virtual void wrapPatchParamBuffer(OpenSubdiv_Buffer * /*patch_param_buffer*/)
-  {
-  }
+  virtual void wrapPatchParamBuffer(OpenSubdiv_Buffer * /*patch_param_buffer*/) {}
 
-  virtual void wrapSrcBuffer(OpenSubdiv_Buffer * /*src_buffer*/)
-  {
-  }
+  virtual void wrapSrcBuffer(OpenSubdiv_Buffer * /*src_buffer*/) {}
 
-  virtual void wrapSrcVertexDataBuffer(OpenSubdiv_Buffer * /*src_buffer*/)
-  {
-  }
+  virtual void wrapSrcVertexDataBuffer(OpenSubdiv_Buffer * /*src_buffer*/) {}
 
   virtual void fillFVarPatchArraysBuffer(const int /*face_varying_channel*/,
                                          OpenSubdiv_Buffer * /*patch_arrays_buffer*/)
@@ -143,9 +133,7 @@ namespace {
 // storage.
 template<typename T> class RawDataWrapperBuffer {
  public:
-  RawDataWrapperBuffer(T *data) : data_(data)
-  {
-  }
+  RawDataWrapperBuffer(T *data) : data_(data) {}
 
   T *BindCpuBuffer()
   {

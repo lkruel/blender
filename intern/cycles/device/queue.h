@@ -36,9 +36,7 @@ struct DeviceKernelArguments {
   size_t sizes[MAX_ARGS];
   size_t count = 0;
 
-  DeviceKernelArguments()
-  {
-  }
+  DeviceKernelArguments() {}
 
   template<class T> DeviceKernelArguments(const T *arg)
   {
@@ -110,6 +108,13 @@ class DeviceQueue {
   virtual int num_sort_partition_elements() const
   {
     return 65536;
+  }
+
+  /* Does device support local atomic sorting kernels (INTEGRATOR_SORT_BUCKET_PASS and
+   * INTEGRATOR_SORT_WRITE_PASS)? */
+  virtual bool supports_local_atomic_sort() const
+  {
+    return false;
   }
 
   /* Initialize execution of kernels on this queue.

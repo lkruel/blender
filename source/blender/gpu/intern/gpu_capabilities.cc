@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2005 Blender Foundation. All rights reserved. */
+ * Copyright 2005 Blender Foundation */
 
 /** \file
  * \ingroup gpu
@@ -159,6 +159,11 @@ bool GPU_clear_viewport_workaround()
 bool GPU_compute_shader_support()
 {
   return GCaps.compute_shader_support;
+}
+
+bool GPU_geometry_shader_support()
+{
+  return GCaps.geometry_shader_support;
 }
 
 bool GPU_shader_storage_buffer_objects_support()

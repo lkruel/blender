@@ -1,9 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2014 Blender Foundation. All rights reserved. */
+ * Copyright 2014 Blender Foundation */
 
 /** \file
  * \ingroup cmpnodes
  */
+
+#include "BLT_translation.h"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -49,6 +51,7 @@ class SunBeamsOperation : public NodeOperation {
   void execute() override
   {
     get_input("Image").pass_through(get_result("Image"));
+    context().set_info_message("Viewport compositor setup not fully supported");
   }
 };
 
@@ -72,6 +75,8 @@ void register_node_type_cmp_sunbeams()
   node_type_storage(
       &ntype, "NodeSunBeams", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.realtime_compositor_unsupported_message = N_(
+      "Node not supported in the Viewport compositor");
 
   nodeRegisterType(&ntype);
 }

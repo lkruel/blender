@@ -108,6 +108,17 @@ class Vector {
   template<typename OtherT, int64_t OtherInlineBufferCapacity, typename OtherAllocator>
   friend class Vector;
 
+  /** Required in case `T` is an incomplete type. */
+  static constexpr bool is_nothrow_move_constructible()
+  {
+    if constexpr (InlineBufferCapacity == 0) {
+      return true;
+    }
+    else {
+      return std::is_nothrow_move_constructible_v<T>;
+    }
+  }
+
  public:
   /**
    * Create an empty vector.
@@ -121,9 +132,7 @@ class Vector {
     UPDATE_VECTOR_SIZE(this);
   }
 
-  Vector(NoExceptConstructor, Allocator allocator = {}) noexcept : Vector(allocator)
-  {
-  }
+  Vector(NoExceptConstructor, Allocator allocator = {}) noexcept : Vector(allocator) {}
 
   /**
    * Create a vector with a specific size.
@@ -157,6 +166,12 @@ class Vector {
     this->increase_size_by_unchecked(size);
   }
 
+  template<typename U, BLI_ENABLE_IF((std::is_convertible_v<U, T>))>
+  explicit Vector(MutableSpan<U> values, Allocator allocator = {})
+      : Vector(values.as_span(), allocator)
+  {
+  }
+
   /**
    * Create a vector that contains copies of the values in the initialized list.
    *
@@ -168,9 +183,7 @@ class Vector {
   {
   }
 
-  Vector(const std::initializer_list<T> &values) : Vector(Span<T>(values))
-  {
-  }
+  Vector(const std::initializer_list<T> &values) : Vector(Span<T>(values)) {}
 
   template<typename U, size_t N, BLI_ENABLE_IF((std::is_convertible_v<U, T>))>
   Vector(const std::array<U, N> &values) : Vector(Span(values))
@@ -208,9 +221,7 @@ class Vector {
    * Create a copy of another vector. The other vector will not be changed. If the other vector has
    * less than InlineBufferCapacity elements, no allocation will be made.
    */
-  Vector(const Vector &other) : Vector(other.as_span(), other.allocator_)
-  {
-  }
+  Vector(const Vector &other) : Vector(other.as_span(), other.allocator_) {}
 
   /**
    * Create a copy of a vector with a different InlineBufferCapacity. This needs to be handled
@@ -228,7 +239,7 @@ class Vector {
    */
   template<int64_t OtherInlineBufferCapacity>
   Vector(Vector<T, OtherInlineBufferCapacity, Allocator> &&other) noexcept(
-      std::is_nothrow_move_constructible_v<T>)
+      is_nothrow_move_constructible())
       : Vector(NoExceptConstructor(), other.allocator_)
   {
     const int64_t size = other.size();
@@ -410,7 +421,7 @@ class Vector {
    * Afterwards the vector has 0 elements and any allocated memory
    * will be freed.
    */
-  void clear_and_make_inline()
+  void clear_and_shrink()
   {
     destruct_n(begin_, this->size());
     if (!this->is_inline()) {
@@ -902,11 +913,11 @@ class Vector {
 
   std::reverse_iterator<const T *> rbegin() const
   {
-    return std::reverse_iterator<T *>(this->end());
+    return std::reverse_iterator<const T *>(this->end());
   }
   std::reverse_iterator<const T *> rend() const
   {
-    return std::reverse_iterator<T *>(this->begin());
+    return std::reverse_iterator<const T *>(this->begin());
   }
 
   /**
@@ -916,6 +927,11 @@ class Vector {
   int64_t capacity() const
   {
     return int64_t(capacity_end_ - begin_);
+  }
+
+  bool is_at_capacity() const
+  {
+    return end_ == capacity_end_;
   }
 
   /**
@@ -930,6 +946,16 @@ class Vector {
   IndexRange index_range() const
   {
     return IndexRange(this->size());
+  }
+
+  uint64_t hash() const
+  {
+    return this->as_span().hash();
+  }
+
+  static uint64_t hash_as(const Span<T> values)
+  {
+    return values.hash();
   }
 
   friend bool operator==(const Vector &a, const Vector &b)
@@ -953,7 +979,7 @@ class Vector {
     std::cout << "  Capacity: " << (capacity_end_ - begin_) << "\n";
     std::cout << "  Inline Capacity: " << InlineBufferCapacity << "\n";
 
-    char memory_size_str[15];
+    char memory_size_str[BLI_STR_FORMAT_INT64_BYTE_UNIT_SIZE];
     BLI_str_format_byte_unit(memory_size_str, sizeof(*this), true);
     std::cout << "  Size on Stack: " << memory_size_str << "\n";
   }

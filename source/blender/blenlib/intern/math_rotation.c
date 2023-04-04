@@ -272,67 +272,86 @@ void quat_to_mat4(float m[4][4], const float q[4])
 void mat3_normalized_to_quat_fast(float q[4], const float mat[3][3])
 {
   BLI_ASSERT_UNIT_M3(mat);
-  /* Caller must ensure matrices aren't negative for valid results, see: T24291, T94231. */
+  /* Caller must ensure matrices aren't negative for valid results, see: #24291, #94231. */
   BLI_assert(!is_negative_m3(mat));
 
-  /* Check the trace of the matrix - bad precision if close to -1. */
-  const float trace = mat[0][0] + mat[1][1] + mat[2][2];
+  /* Method outlined by Mike Day, ref: https://math.stackexchange.com/a/3183435/220949
+   * with an additional `sqrtf(..)` for higher precision result.
+   * Removing the `sqrt` causes tests to fail unless the precision is set to 1e-6 or larger. */
 
-  if (trace > 0) {
-    float s = 2.0f * sqrtf(1.0f + trace);
-
-    q[0] = 0.25f * s;
-
-    s = 1.0f / s;
-
-    q[1] = (mat[1][2] - mat[2][1]) * s;
-    q[2] = (mat[2][0] - mat[0][2]) * s;
-    q[3] = (mat[0][1] - mat[1][0]) * s;
-  }
-  else {
-    /* Find the biggest diagonal element to choose the best formula.
-     * Here trace should also be always >= 0, avoiding bad precision. */
-    if (mat[0][0] > mat[1][1] && mat[0][0] > mat[2][2]) {
-      float s = 2.0f * sqrtf(1.0f + mat[0][0] - mat[1][1] - mat[2][2]);
-
+  if (mat[2][2] < 0.0f) {
+    if (mat[0][0] > mat[1][1]) {
+      const float trace = 1.0f + mat[0][0] - mat[1][1] - mat[2][2];
+      float s = 2.0f * sqrtf(trace);
+      if (mat[1][2] < mat[2][1]) {
+        /* Ensure W is non-negative for a canonical result. */
+        s = -s;
+      }
       q[1] = 0.25f * s;
-
       s = 1.0f / s;
-
       q[0] = (mat[1][2] - mat[2][1]) * s;
-      q[2] = (mat[1][0] + mat[0][1]) * s;
+      q[2] = (mat[0][1] + mat[1][0]) * s;
       q[3] = (mat[2][0] + mat[0][2]) * s;
-    }
-    else if (mat[1][1] > mat[2][2]) {
-      float s = 2.0f * sqrtf(1.0f + mat[1][1] - mat[0][0] - mat[2][2]);
-
-      q[2] = 0.25f * s;
-
-      s = 1.0f / s;
-
-      q[0] = (mat[2][0] - mat[0][2]) * s;
-      q[1] = (mat[1][0] + mat[0][1]) * s;
-      q[3] = (mat[2][1] + mat[1][2]) * s;
+      if (UNLIKELY((trace == 1.0f) && (q[0] == 0.0f && q[2] == 0.0f && q[3] == 0.0f))) {
+        /* Avoids the need to normalize the degenerate case. */
+        q[1] = 1.0f;
+      }
     }
     else {
-      float s = 2.0f * sqrtf(1.0f + mat[2][2] - mat[0][0] - mat[1][1]);
-
-      q[3] = 0.25f * s;
-
+      const float trace = 1.0f - mat[0][0] + mat[1][1] - mat[2][2];
+      float s = 2.0f * sqrtf(trace);
+      if (mat[2][0] < mat[0][2]) {
+        /* Ensure W is non-negative for a canonical result. */
+        s = -s;
+      }
+      q[2] = 0.25f * s;
       s = 1.0f / s;
-
+      q[0] = (mat[2][0] - mat[0][2]) * s;
+      q[1] = (mat[0][1] + mat[1][0]) * s;
+      q[3] = (mat[1][2] + mat[2][1]) * s;
+      if (UNLIKELY((trace == 1.0f) && (q[0] == 0.0f && q[1] == 0.0f && q[3] == 0.0f))) {
+        /* Avoids the need to normalize the degenerate case. */
+        q[2] = 1.0f;
+      }
+    }
+  }
+  else {
+    if (mat[0][0] < -mat[1][1]) {
+      const float trace = 1.0f - mat[0][0] - mat[1][1] + mat[2][2];
+      float s = 2.0f * sqrtf(trace);
+      if (mat[0][1] < mat[1][0]) {
+        /* Ensure W is non-negative for a canonical result. */
+        s = -s;
+      }
+      q[3] = 0.25f * s;
+      s = 1.0f / s;
       q[0] = (mat[0][1] - mat[1][0]) * s;
       q[1] = (mat[2][0] + mat[0][2]) * s;
-      q[2] = (mat[2][1] + mat[1][2]) * s;
+      q[2] = (mat[1][2] + mat[2][1]) * s;
+      if (UNLIKELY((trace == 1.0f) && (q[0] == 0.0f && q[1] == 0.0f && q[2] == 0.0f))) {
+        /* Avoids the need to normalize the degenerate case. */
+        q[3] = 1.0f;
+      }
     }
-
-    /* Make sure W is non-negative for a canonical result. */
-    if (q[0] < 0) {
-      negate_v4(q);
+    else {
+      /* NOTE(@ideasman42): A zero matrix will fall through to this block,
+       * needed so a zero scaled matrices to return a quaternion without rotation, see: #101848. */
+      const float trace = 1.0f + mat[0][0] + mat[1][1] + mat[2][2];
+      float s = 2.0f * sqrtf(trace);
+      q[0] = 0.25f * s;
+      s = 1.0f / s;
+      q[1] = (mat[1][2] - mat[2][1]) * s;
+      q[2] = (mat[2][0] - mat[0][2]) * s;
+      q[3] = (mat[0][1] - mat[1][0]) * s;
+      if (UNLIKELY((trace == 1.0f) && (q[1] == 0.0f && q[2] == 0.0f && q[3] == 0.0f))) {
+        /* Avoids the need to normalize the degenerate case. */
+        q[0] = 1.0f;
+      }
     }
   }
 
-  normalize_qt(q);
+  BLI_assert(!(q[0] < 0.0f));
+  BLI_ASSERT_UNIT_QUAT(q);
 }
 
 static void mat3_normalized_to_quat_with_checks(float q[4], float mat[3][3])
@@ -945,7 +964,7 @@ void sin_cos_from_fraction(int numerator, int denominator, float *r_sin, float *
   /* By default, creating a circle from an integer: calling #sinf & #cosf on the fraction doesn't
    * create symmetrical values (because floats can't represent Pi exactly).
    * Resolve this when the rotation is calculated from a fraction by mapping the `numerator`
-   * to lower values so X/Y values for points around a circle are exactly symmetrical, see T87779.
+   * to lower values so X/Y values for points around a circle are exactly symmetrical, see #87779.
    *
    * Multiply both the `numerator` and `denominator` by eight to ensure we can divide the circle
    * into 8 octants. For each octant, we then use symmetry and negation to bring the `numerator`
@@ -1471,15 +1490,18 @@ void rotate_eul(float beul[3], const char axis, const float angle)
 
 void compatible_eul(float eul[3], const float oldrot[3])
 {
-  /* we could use M_PI as pi_thresh: which is correct but 5.1 gives better results.
-   * Checked with baking actions to fcurves - campbell */
-  const float pi_thresh = (5.1f);
+  /* When the rotation exceeds 180 degrees, it can be wrapped by 360 degrees
+   * to produce a closer match.
+   * NOTE: Values between `pi` & `2 * pi` work, where `pi` has the lowest number of
+   * discontinuities and values approaching `2 * pi` center the resulting rotation around zero,
+   * at the expense of the result being less compatible, see !104856. */
+  const float pi_thresh = (float)M_PI;
   const float pi_x2 = (2.0f * (float)M_PI);
 
   float deul[3];
   uint i;
 
-  /* correct differences of about 360 degrees first */
+  /* Correct differences around 360 degrees first. */
   for (i = 0; i < 3; i++) {
     deul[i] = eul[i] - oldrot[i];
     if (deul[i] > pi_thresh) {
@@ -1492,29 +1514,17 @@ void compatible_eul(float eul[3], const float oldrot[3])
     }
   }
 
-  /* is 1 of the axis rotations larger than 180 degrees and the other small? NO ELSE IF!! */
-  if (fabsf(deul[0]) > 3.2f && fabsf(deul[1]) < 1.6f && fabsf(deul[2]) < 1.6f) {
-    if (deul[0] > 0.0f) {
-      eul[0] -= pi_x2;
-    }
-    else {
-      eul[0] += pi_x2;
-    }
-  }
-  if (fabsf(deul[1]) > 3.2f && fabsf(deul[2]) < 1.6f && fabsf(deul[0]) < 1.6f) {
-    if (deul[1] > 0.0f) {
-      eul[1] -= pi_x2;
-    }
-    else {
-      eul[1] += pi_x2;
-    }
-  }
-  if (fabsf(deul[2]) > 3.2f && fabsf(deul[0]) < 1.6f && fabsf(deul[1]) < 1.6f) {
-    if (deul[2] > 0.0f) {
-      eul[2] -= pi_x2;
-    }
-    else {
-      eul[2] += pi_x2;
+  uint j = 1, k = 2;
+  for (i = 0; i < 3; j = k, k = i++) {
+    /* Check if this axis of rotations larger than 180 degrees and
+     * the others are smaller than 90 degrees. */
+    if (fabsf(deul[i]) > M_PI && fabsf(deul[j]) < M_PI_2 && fabsf(deul[k]) < M_PI_2) {
+      if (deul[i] > 0.0f) {
+        eul[i] -= pi_x2;
+      }
+      else {
+        eul[i] += pi_x2;
+      }
     }
   }
 }

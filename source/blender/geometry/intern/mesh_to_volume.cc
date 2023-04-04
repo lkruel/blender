@@ -1,6 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_mesh.h"
+#include "BLI_math_matrix.hh"
+#include "BLI_task.hh"
+
+#include "BKE_mesh.hh"
 #include "BKE_mesh_runtime.h"
 #include "BKE_volume.h"
 
@@ -16,8 +19,8 @@ namespace blender::geometry {
 /* This class follows the MeshDataAdapter interface from openvdb. */
 class OpenVDBMeshAdapter {
  private:
-  Span<MVert> verts_;
-  Span<MLoop> loops_;
+  Span<float3> positions_;
+  Span<int> corner_verts_;
   Span<MLoopTri> looptris_;
   float4x4 transform_;
 
@@ -30,7 +33,10 @@ class OpenVDBMeshAdapter {
 };
 
 OpenVDBMeshAdapter::OpenVDBMeshAdapter(const Mesh &mesh, float4x4 transform)
-    : verts_(mesh.verts()), loops_(mesh.loops()), looptris_(mesh.looptris()), transform_(transform)
+    : positions_(mesh.vert_positions()),
+      corner_verts_(mesh.corner_verts()),
+      looptris_(mesh.looptris()),
+      transform_(transform)
 {
 }
 
@@ -41,7 +47,7 @@ size_t OpenVDBMeshAdapter::polygonCount() const
 
 size_t OpenVDBMeshAdapter::pointCount() const
 {
-  return size_t(verts_.size());
+  return size_t(positions_.size());
 }
 
 size_t OpenVDBMeshAdapter::vertexCount(size_t /*polygon_index*/) const
@@ -55,8 +61,8 @@ void OpenVDBMeshAdapter::getIndexSpacePoint(size_t polygon_index,
                                             openvdb::Vec3d &pos) const
 {
   const MLoopTri &looptri = looptris_[polygon_index];
-  const MVert &vertex = verts_[loops_[looptri.tri[vertex_index]].v];
-  const float3 transformed_co = transform_ * float3(vertex.co);
+  const float3 transformed_co = math::transform_point(
+      transform_, positions_[corner_verts_[looptri.tri[vertex_index]]]);
   pos = &transformed_co.x;
 }
 
@@ -84,30 +90,31 @@ float volume_compute_voxel_size(const Depsgraph *depsgraph,
 
   /* Compute the voxel size based on the desired number of voxels and the approximated bounding
    * box of the volume. */
-  const float diagonal = math::distance(transform * bb_max, transform * bb_min);
+  const float diagonal = math::distance(math::transform_point(transform, bb_max),
+                                        math::transform_point(transform, bb_min));
   const float approximate_volume_side_length = diagonal + exterior_band_width * 2.0f;
   const float voxel_size = approximate_volume_side_length / res.settings.voxel_amount /
                            volume_simplify;
   return voxel_size;
 }
 
-static openvdb::FloatGrid::Ptr mesh_to_volume_grid(const Mesh *mesh,
-                                                   const float4x4 &mesh_to_volume_space_transform,
-                                                   const float voxel_size,
-                                                   const bool fill_volume,
-                                                   const float exterior_band_width,
-                                                   const float interior_band_width,
-                                                   const float density)
+static openvdb::FloatGrid::Ptr mesh_to_fog_volume_grid(
+    const Mesh *mesh,
+    const float4x4 &mesh_to_volume_space_transform,
+    const float voxel_size,
+    const bool fill_volume,
+    const float exterior_band_width,
+    const float interior_band_width,
+    const float density)
 {
   if (voxel_size == 0.0f) {
     return nullptr;
   }
 
-  float4x4 mesh_to_index_space_transform;
-  scale_m4_fl(mesh_to_index_space_transform.values, 1.0f / voxel_size);
-  mul_m4_m4_post(mesh_to_index_space_transform.values, mesh_to_volume_space_transform.values);
+  float4x4 mesh_to_index_space_transform = math::from_scale<float4x4>(float3(1.0f / voxel_size));
+  mesh_to_index_space_transform *= mesh_to_volume_space_transform;
   /* Better align generated grid with the source mesh. */
-  add_v3_fl(mesh_to_index_space_transform.values[3], -0.5f);
+  mesh_to_index_space_transform.location() -= 0.5f;
 
   OpenVDBMeshAdapter mesh_adapter{*mesh, mesh_to_index_space_transform};
 
@@ -115,55 +122,99 @@ static openvdb::FloatGrid::Ptr mesh_to_volume_grid(const Mesh *mesh,
   const float exterior = MAX2(0.001f, exterior_band_width / voxel_size);
   const float interior = MAX2(0.001f, interior_band_width / voxel_size);
 
-  openvdb::FloatGrid::Ptr new_grid;
-  if (fill_volume) {
-    /* Setting the interior bandwidth to FLT_MAX, will make it fill the entire volume. */
-    new_grid = openvdb::tools::meshToVolume<openvdb::FloatGrid>(
-        mesh_adapter, {}, exterior, FLT_MAX);
-  }
-  else {
-    new_grid = openvdb::tools::meshToVolume<openvdb::FloatGrid>(
-        mesh_adapter, {}, exterior, interior);
-  }
+  /* Setting the interior bandwidth to FLT_MAX, will make it fill the entire volume. */
+  openvdb::FloatGrid::Ptr new_grid = openvdb::tools::meshToVolume<openvdb::FloatGrid>(
+      mesh_adapter, {}, exterior, fill_volume ? FLT_MAX : interior);
 
   /* Give each grid cell a fixed density for now. */
   openvdb::tools::foreach (
       new_grid->beginValueOn(),
       [density](const openvdb::FloatGrid::ValueOnIter &iter) { iter.setValue(density); });
 
+  new_grid->setGridClass(openvdb::GRID_FOG_VOLUME);
+
   return new_grid;
 }
 
-VolumeGrid *volume_grid_add_from_mesh(Volume *volume,
-                                      const StringRefNull name,
-                                      const Mesh *mesh,
-                                      const float4x4 &mesh_to_volume_space_transform,
-                                      const float voxel_size,
-                                      const bool fill_volume,
-                                      const float exterior_band_width,
-                                      const float interior_band_width,
-                                      const float density)
+static openvdb::FloatGrid::Ptr mesh_to_sdf_volume_grid(const Mesh &mesh,
+                                                       const float voxel_size,
+                                                       const float half_band_width)
+{
+  if (voxel_size <= 0.0f || half_band_width <= 0.0f) {
+    return nullptr;
+  }
+
+  const Span<float3> positions = mesh.vert_positions();
+  const Span<int> corner_verts = mesh.corner_verts();
+  const Span<MLoopTri> looptris = mesh.looptris();
+
+  std::vector<openvdb::Vec3s> points(positions.size());
+  std::vector<openvdb::Vec3I> triangles(looptris.size());
+
+  threading::parallel_for(positions.index_range(), 2048, [&](const IndexRange range) {
+    for (const int i : range) {
+      const float3 &co = positions[i];
+      points[i] = openvdb::Vec3s(co.x, co.y, co.z) - 0.5f * voxel_size;
+    }
+  });
+
+  threading::parallel_for(looptris.index_range(), 2048, [&](const IndexRange range) {
+    for (const int i : range) {
+      const MLoopTri &loop_tri = looptris[i];
+      triangles[i] = openvdb::Vec3I(corner_verts[loop_tri.tri[0]],
+                                    corner_verts[loop_tri.tri[1]],
+                                    corner_verts[loop_tri.tri[2]]);
+    }
+  });
+
+  openvdb::math::Transform::Ptr transform = openvdb::math::Transform::createLinearTransform(
+      voxel_size);
+  openvdb::FloatGrid::Ptr new_grid = openvdb::tools::meshToLevelSet<openvdb::FloatGrid>(
+      *transform, points, triangles, half_band_width);
+
+  return new_grid;
+}
+
+VolumeGrid *fog_volume_grid_add_from_mesh(Volume *volume,
+                                          const StringRefNull name,
+                                          const Mesh *mesh,
+                                          const float4x4 &mesh_to_volume_space_transform,
+                                          const float voxel_size,
+                                          const bool fill_volume,
+                                          const float exterior_band_width,
+                                          const float interior_band_width,
+                                          const float density)
 {
   VolumeGrid *c_grid = BKE_volume_grid_add(volume, name.c_str(), VOLUME_GRID_FLOAT);
   openvdb::FloatGrid::Ptr grid = openvdb::gridPtrCast<openvdb::FloatGrid>(
       BKE_volume_grid_openvdb_for_write(volume, c_grid, false));
 
   /* Generate grid from mesh */
-  openvdb::FloatGrid::Ptr mesh_grid = mesh_to_volume_grid(mesh,
-                                                          mesh_to_volume_space_transform,
-                                                          voxel_size,
-                                                          fill_volume,
-                                                          exterior_band_width,
-                                                          interior_band_width,
-                                                          density);
+  openvdb::FloatGrid::Ptr mesh_grid = mesh_to_fog_volume_grid(mesh,
+                                                              mesh_to_volume_space_transform,
+                                                              voxel_size,
+                                                              fill_volume,
+                                                              exterior_band_width,
+                                                              interior_band_width,
+                                                              density);
 
-  /* Merge the generated grid. Should be cheap because grid has just been created. */
-  grid->merge(*mesh_grid);
-  /* Set class to "Fog Volume". */
-  grid->setGridClass(openvdb::GRID_FOG_VOLUME);
-  /* Change transform so that the index space is correctly transformed to object space. */
-  grid->transform().postScale(voxel_size);
+  if (mesh_grid != nullptr) {
+    /* Merge the generated grid. Should be cheap because grid has just been created. */
+    grid->merge(*mesh_grid);
+    /* Change transform so that the index space is correctly transformed to object space. */
+    grid->transform().postScale(voxel_size);
+  }
   return c_grid;
+}
+
+VolumeGrid *sdf_volume_grid_add_from_mesh(Volume *volume,
+                                          const StringRefNull name,
+                                          const Mesh &mesh,
+                                          const float voxel_size,
+                                          const float half_band_width)
+{
+  openvdb::FloatGrid::Ptr mesh_grid = mesh_to_sdf_volume_grid(mesh, voxel_size, half_band_width);
+  return mesh_grid ? BKE_volume_grid_add_vdb(*volume, name, std::move(mesh_grid)) : nullptr;
 }
 }  // namespace blender::geometry
 #endif

@@ -89,7 +89,7 @@ template<
      * The equality operator used to compare keys. By default it will simply compare keys using the
      * `==` operator.
      */
-    typename IsEqual = DefaultEquality,
+    typename IsEqual = DefaultEquality<Key>,
     /**
      * This is what will actually be stored in the hash table array. At a minimum a slot has to
      * be able to hold a key and information about whether the slot is empty, occupied or removed.
@@ -175,9 +175,7 @@ class Set {
   {
   }
 
-  Set(NoExceptConstructor, Allocator allocator = {}) noexcept : Set(allocator)
-  {
-  }
+  Set(NoExceptConstructor, Allocator allocator = {}) noexcept : Set(allocator) {}
 
   Set(Span<Key> values, Allocator allocator = {}) : Set(NoExceptConstructor(), allocator)
   {
@@ -187,9 +185,7 @@ class Set {
   /**
    * Construct a set that contains the given keys. Duplicates will be removed automatically.
    */
-  Set(const std::initializer_list<Key> &values) : Set(Span<Key>(values))
-  {
-  }
+  Set(const std::initializer_list<Key> &values) : Set(Span<Key>(values)) {}
 
   ~Set() = default;
 
@@ -543,6 +539,15 @@ class Set {
   }
 
   /**
+   * Removes all keys from the set and frees any allocated memory.
+   */
+  void clear_and_shrink()
+  {
+    std::destroy_at(this);
+    new (this) Set(NoExceptConstructor{});
+  }
+
+  /**
    * Creates a new slot array and reinserts all keys inside of that. This method can be used to get
    * rid of removed slots. Also this is useful for benchmarking the grow function.
    */
@@ -635,6 +640,24 @@ class Set {
   static bool Disjoint(const Set &a, const Set &b)
   {
     return !Intersects(a, b);
+  }
+
+  friend bool operator==(const Set &a, const Set &b)
+  {
+    if (a.size() != b.size()) {
+      return false;
+    }
+    for (const Key &key : a) {
+      if (!b.contains(key)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  friend bool operator!=(const Set &a, const Set &b)
+  {
+    return !(a == b);
   }
 
  private:
@@ -949,7 +972,7 @@ template<typename Key,
          int64_t InlineBufferCapacity = default_inline_buffer_capacity(sizeof(Key)),
          typename ProbingStrategy = DefaultProbingStrategy,
          typename Hash = DefaultHash<Key>,
-         typename IsEqual = DefaultEquality,
+         typename IsEqual = DefaultEquality<Key>,
          typename Slot = typename DefaultSetSlot<Key>::type>
 using RawSet = Set<Key, InlineBufferCapacity, ProbingStrategy, Hash, IsEqual, Slot, RawAllocator>;
 

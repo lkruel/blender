@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2022 Blender Foundation. All rights reserved. */
+ * Copyright 2022 Blender Foundation */
 
 /** \file
  * \ingroup gpu
@@ -9,10 +9,36 @@
 
 #include "gpu_backend.hh"
 
+#ifdef WITH_RENDERDOC
+#  include "renderdoc_api.hh"
+#endif
+
+#include "vk_common.hh"
+
+#include "shaderc/shaderc.hpp"
+
 namespace blender::gpu {
 
+class VKContext;
+
 class VKBackend : public GPUBackend {
+ private:
+  shaderc::Compiler shaderc_compiler_;
+#ifdef WITH_RENDERDOC
+  renderdoc::api::Renderdoc renderdoc_api_;
+#endif
+
  public:
+  VKBackend()
+  {
+    VKBackend::init_platform();
+  }
+
+  virtual ~VKBackend()
+  {
+    VKBackend::platform_exit();
+  }
+
   void delete_resources() override;
 
   void samplers_update() override;
@@ -23,8 +49,10 @@ class VKBackend : public GPUBackend {
 
   Batch *batch_alloc() override;
   DrawList *drawlist_alloc(int list_length) override;
+  Fence *fence_alloc() override;
   FrameBuffer *framebuffer_alloc(const char *name) override;
   IndexBuf *indexbuf_alloc() override;
+  PixelBuffer *pixelbuf_alloc(uint size) override;
   QueryPool *querypool_alloc() override;
   Shader *shader_alloc(const char *name) override;
   Texture *texture_alloc(const char *name) override;
@@ -37,6 +65,22 @@ class VKBackend : public GPUBackend {
   void render_begin() override;
   void render_end() override;
   void render_step() override;
+
+  bool debug_capture_begin(VkInstance vk_instance);
+  void debug_capture_end(VkInstance vk_instance);
+
+  shaderc::Compiler &get_shaderc_compiler();
+
+  static void capabilities_init(VKContext &context);
+
+  static VKBackend &get()
+  {
+    return *static_cast<VKBackend *>(GPUBackend::get());
+  }
+
+ private:
+  static void init_platform();
+  static void platform_exit();
 };
 
 }  // namespace blender::gpu

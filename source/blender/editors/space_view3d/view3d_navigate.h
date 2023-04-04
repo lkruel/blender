@@ -1,11 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2008 Blender Foundation. All rights reserved. */
+ * Copyright 2008 Blender Foundation */
 
 /** \file
  * \ingroup spview3d
  */
 
 #pragma once
+
+#include "BLI_utildefines.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,6 +43,8 @@ enum {
   VIEW_PASS = 0,
   VIEW_APPLY,
   VIEW_CONFIRM,
+  /** Only supported by some viewport operators. */
+  VIEW_CANCEL,
 };
 
 /* NOTE: these defines are saved in keymap files, do not change values but just add new ones */
@@ -54,6 +58,7 @@ enum {
 };
 
 enum eViewOpsFlag {
+  VIEWOPS_FLAG_NONE = 0,
   /** When enabled, rotate around the selection. */
   VIEWOPS_FLAG_ORBIT_SELECT = (1 << 0),
   /** When enabled, use the depth under the cursor for navigation. */
@@ -67,6 +72,7 @@ enum eViewOpsFlag {
   /** When set, ignore any options that depend on initial cursor location. */
   VIEWOPS_FLAG_USE_MOUSE_INIT = (1 << 3),
 };
+ENUM_OPERATORS(eViewOpsFlag, VIEWOPS_FLAG_USE_MOUSE_INIT);
 
 /** Generic View Operator Custom-Data */
 typedef struct ViewOpsData {
@@ -95,8 +101,13 @@ typedef struct ViewOpsData {
     /** #wmEvent.type that triggered the operator. */
     int event_type;
     float ofs[3];
+    /** #RegionView3D.ofs_lock */
+    float ofs_lock[2];
     /** Initial distance to 'ofs'. */
     float zfac;
+
+    /** Camera offset. */
+    float camdx, camdy;
 
     /** Trackball rotation only. */
     float trackvec[3];
@@ -107,7 +118,13 @@ typedef struct ViewOpsData {
      * #RegionView3D.persp set after auto-perspective is applied.
      * If we want the value before running the operator, add a separate member.
      */
+    char persp_with_auto_persp_applied;
+    /** #RegionView3D.persp set after before auto-perspective is applied. */
     char persp;
+    /** #RegionView3D.view */
+    char view;
+    /** #RegionView3D.view_axis_roll */
+    char view_axis_roll;
 
     /** Used for roll */
     struct Dial *dial;
@@ -136,15 +153,18 @@ typedef struct ViewOpsData {
   bool use_dyn_ofs;
 } ViewOpsData;
 
-/* view3d_navigate.c */
+/* view3d_navigate.cc */
 
 bool view3d_location_poll(struct bContext *C);
 bool view3d_rotation_poll(struct bContext *C);
 bool view3d_zoom_or_dolly_poll(struct bContext *C);
 
+void view3d_navigate_cancel_fn(struct bContext *C, struct wmOperator *op);
+
 enum eViewOpsFlag viewops_flag_from_prefs(void);
 void calctrackballvec(const struct rcti *rect, const int event_xy[2], float r_dir[3]);
 void viewmove_apply(ViewOpsData *vod, int x, int y);
+void viewmove_apply_reset(ViewOpsData *vod);
 void view3d_orbit_apply_dyn_ofs(float r_ofs[3],
                                 const float ofs_old[3],
                                 const float viewquat_old[4],

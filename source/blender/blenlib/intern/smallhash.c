@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2008 Blender Foundation. All rights reserved. */
+ * Copyright 2008 Blender Foundation */
 
 /** \file
  * \ingroup bli
@@ -329,7 +329,7 @@ void **BLI_smallhash_iternew_p(const SmallHash *sh, SmallHashIter *iter, uintptr
 /** \name Debugging & Introspection
  * \{ */
 
-/* NOTE(@campbellbarton): useful for debugging but may not be intended for general use. */
+/* NOTE(@ideasman42): useful for debugging but may not be intended for general use. */
 #if 0
 void BLI_smallhash_print(SmallHash *sh)
 {

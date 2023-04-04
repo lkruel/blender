@@ -183,11 +183,12 @@ static void nla_actionclip_draw_markers(
 
     float viewport_size[4];
     GPU_viewport_size_get_f(viewport_size);
-    immUniform2f("viewport_size", viewport_size[2] / UI_DPI_FAC, viewport_size[3] / UI_DPI_FAC);
+    immUniform2f(
+        "viewport_size", viewport_size[2] / UI_SCALE_FAC, viewport_size[3] / UI_SCALE_FAC);
 
     immUniform1i("colors_len", 0); /* "simple" mode */
     immUniform1f("dash_width", 6.0f);
-    immUniform1f("dash_factor", 0.5f);
+    immUniform1f("udash_factor", 0.5f);
   }
   else {
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
@@ -382,7 +383,7 @@ static uint nla_draw_use_dashed_outlines(const float color[4], bool muted)
 
   float viewport_size[4];
   GPU_viewport_size_get_f(viewport_size);
-  immUniform2f("viewport_size", viewport_size[2] / UI_DPI_FAC, viewport_size[3] / UI_DPI_FAC);
+  immUniform2f("viewport_size", viewport_size[2] / UI_SCALE_FAC, viewport_size[3] / UI_SCALE_FAC);
 
   immUniform1i("colors_len", 0); /* Simple dashes. */
   immUniformColor3fv(color);
@@ -391,12 +392,12 @@ static uint nla_draw_use_dashed_outlines(const float color[4], bool muted)
   if (muted) {
     /* dotted - and slightly thicker for readability of the dashes */
     immUniform1f("dash_width", 5.0f);
-    immUniform1f("dash_factor", 0.4f);
+    immUniform1f("udash_factor", 0.4f);
     GPU_line_width(1.5f);
   }
   else {
     /* solid line */
-    immUniform1f("dash_factor", 2.0f);
+    immUniform1f("udash_factor", 2.0f);
     GPU_line_width(1.0f);
   }
 
@@ -432,8 +433,9 @@ static void nla_draw_strip(SpaceNla *snla,
                            float yminc,
                            float ymaxc)
 {
-  const bool non_solo = ((adt && (adt->flag & ADT_NLA_SOLO_TRACK)) &&
-                         (nlt->flag & NLATRACK_SOLO) == 0);
+  const bool solo = !((adt && (adt->flag & ADT_NLA_SOLO_TRACK)) &&
+                      (nlt->flag & NLATRACK_SOLO) == 0);
+
   const bool muted = ((nlt->flag & NLATRACK_MUTED) || (strip->flag & NLASTRIP_FLAG_MUTED));
   float color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
   uint shdr_pos;
@@ -447,7 +449,7 @@ static void nla_draw_strip(SpaceNla *snla,
   /* draw extrapolation info first (as backdrop)
    * - but this should only be drawn if track has some contribution
    */
-  if ((strip->extendmode != NLASTRIP_EXTEND_NOTHING) && (non_solo == 0)) {
+  if ((strip->extendmode != NLASTRIP_EXTEND_NOTHING) && solo) {
     /* enable transparency... */
     GPU_blend(GPU_BLEND_ALPHA);
 
@@ -485,7 +487,7 @@ static void nla_draw_strip(SpaceNla *snla,
   }
 
   /* draw 'inside' of strip itself */
-  if (non_solo == 0 && is_nlastrip_enabled(adt, nlt, strip)) {
+  if (solo && is_nlastrip_enabled(adt, nlt, strip)) {
     immUnbindProgram();
 
     /* strip is in normal track */
@@ -628,8 +630,9 @@ static void nla_draw_strip_text(AnimData *adt,
                                 float yminc,
                                 float ymaxc)
 {
-  const bool non_solo = ((adt && (adt->flag & ADT_NLA_SOLO_TRACK)) &&
-                         (nlt->flag & NLATRACK_SOLO) == 0);
+  const bool solo = !((adt && (adt->flag & ADT_NLA_SOLO_TRACK)) &&
+                      (nlt->flag & NLATRACK_SOLO) == 0);
+
   char str[256];
   size_t str_len;
   uchar col[4];
@@ -649,12 +652,12 @@ static void nla_draw_strip_text(AnimData *adt,
   else {
     col[0] = col[1] = col[2] = 255;
   }
+  // Default strip to 100% opacity.
+  col[3] = 255;
 
-  /* text opacity depends on whether if there's a solo'd track, this isn't it */
-  if (non_solo == 0) {
-    col[3] = 255;
-  }
-  else {
+  /* Reduce text opacity if a track is soloed,
+   * and if target track isn't the soloed track. */
+  if (!solo) {
     col[3] = 128;
   }
 
@@ -789,7 +792,7 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
 {
   View2D *v2d = &region->v2d;
   const float pixelx = BLI_rctf_size_x(&v2d->cur) / BLI_rcti_size_x(&v2d->mask);
-  const float text_margin_x = (8 * UI_DPI_FAC) * pixelx;
+  const float text_margin_x = (8 * UI_SCALE_FAC) * pixelx;
 
   /* build list of channels to draw */
   ListBase anim_data = {NULL, NULL};

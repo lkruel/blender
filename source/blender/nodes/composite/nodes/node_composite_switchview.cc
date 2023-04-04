@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2006 Blender Foundation. All rights reserved. */
+ * Copyright 2006 Blender Foundation */
 
 /** \file
  * \ingroup cmpnodes
@@ -48,7 +48,7 @@ static void cmp_node_switch_view_update(bNodeTree *ntree, bNode *node)
   Scene *scene = (Scene *)node->id;
 
   /* only update when called from the operator button */
-  if (node->update != NODE_UPDATE_OPERATOR) {
+  if (node->runtime->update != NODE_UPDATE_OPERATOR) {
     return;
   }
 

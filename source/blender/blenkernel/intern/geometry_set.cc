@@ -11,7 +11,7 @@
 #include "BKE_geometry_set.hh"
 #include "BKE_instances.hh"
 #include "BKE_lib_id.h"
-#include "BKE_mesh.h"
+#include "BKE_mesh.hh"
 #include "BKE_mesh_wrapper.h"
 #include "BKE_modifier.h"
 #include "BKE_pointcloud.h"
@@ -39,9 +39,7 @@ using blender::bke::Instances;
 /** \name Geometry Component
  * \{ */
 
-GeometryComponent::GeometryComponent(GeometryComponentType type) : type_(type)
-{
-}
+GeometryComponent::GeometryComponent(GeometryComponentType type) : type_(type) {}
 
 GeometryComponent *GeometryComponent::create(GeometryComponentType component_type)
 {
@@ -84,26 +82,6 @@ std::optional<blender::bke::MutableAttributeAccessor> GeometryComponent::attribu
   return std::nullopt;
 }
 
-void GeometryComponent::user_add() const
-{
-  users_.fetch_add(1);
-}
-
-void GeometryComponent::user_remove() const
-{
-  const int new_users = users_.fetch_sub(1) - 1;
-  if (new_users == 0) {
-    delete this;
-  }
-}
-
-bool GeometryComponent::is_mutable() const
-{
-  /* If the item is shared, it is read-only. */
-  /* The user count can be 0, when this is called from the destructor. */
-  return users_ <= 1;
-}
-
 GeometryComponentType GeometryComponent::type() const
 {
   return type_;
@@ -112,6 +90,11 @@ GeometryComponentType GeometryComponent::type() const
 bool GeometryComponent::is_empty() const
 {
   return false;
+}
+
+void GeometryComponent::delete_self()
+{
+  delete this;
 }
 
 /** \} */
@@ -161,7 +144,8 @@ const GeometryComponent *GeometrySet::get_component_for_read(
 
 bool GeometrySet::has(const GeometryComponentType component_type) const
 {
-  return components_[component_type].has_value();
+  const GeometryComponentPtr &component = components_[component_type];
+  return component.has_value() && !component->is_empty();
 }
 
 void GeometrySet::remove(const GeometryComponentType component_type)
@@ -197,7 +181,7 @@ void GeometrySet::remove_geometry_during_modify()
 void GeometrySet::add(const GeometryComponent &component)
 {
   BLI_assert(!components_[component.type()]);
-  component.user_add();
+  component.add_user();
   components_[component.type()] = const_cast<GeometryComponent *>(&component);
 }
 
@@ -217,7 +201,7 @@ bool GeometrySet::compute_boundbox_without_instances(float3 *r_min, float3 *r_ma
   using namespace blender;
   bool have_minmax = false;
   if (const PointCloud *pointcloud = this->get_pointcloud_for_read()) {
-    have_minmax |= BKE_pointcloud_minmax(pointcloud, *r_min, *r_max);
+    have_minmax |= pointcloud->bounds_min_max(*r_min, *r_max);
   }
   if (const Mesh *mesh = this->get_mesh_for_read()) {
     have_minmax |= BKE_mesh_wrapper_minmax(mesh, *r_min, *r_max);
@@ -226,15 +210,8 @@ bool GeometrySet::compute_boundbox_without_instances(float3 *r_min, float3 *r_ma
     have_minmax |= BKE_volume_min_max(volume, *r_min, *r_max);
   }
   if (const Curves *curves_id = this->get_curves_for_read()) {
-    const bke::CurvesGeometry &curves = bke::CurvesGeometry::wrap(curves_id->geometry);
-    /* Using the evaluated positions is somewhat arbitrary, but it is probably expected. */
-    std::optional<bounds::MinMaxResult<float3>> min_max = bounds::min_max(
-        curves.evaluated_positions());
-    if (min_max) {
-      have_minmax = true;
-      *r_min = math::min(*r_min, min_max->min);
-      *r_max = math::max(*r_max, min_max->max);
-    }
+    const bke::CurvesGeometry &curves = curves_id->geometry.wrap();
+    have_minmax |= curves.bounds_min_max(*r_min, *r_max);
   }
   return have_minmax;
 }
@@ -587,6 +564,7 @@ void GeometrySet::gather_attributes_for_propagation(
     const Span<GeometryComponentType> component_types,
     const GeometryComponentType dst_component_type,
     bool include_instances,
+    const blender::bke::AnonymousAttributePropagationInfo &propagation_info,
     blender::Map<blender::bke::AttributeIDRef, blender::bke::AttributeKind> &r_attributes) const
 {
   using namespace blender;
@@ -611,7 +589,8 @@ void GeometrySet::gather_attributes_for_propagation(
           /* Propagating string attributes is not supported yet. */
           return;
         }
-        if (!attribute_id.should_be_kept()) {
+        if (attribute_id.is_anonymous() &&
+            !propagation_info.propagate(attribute_id.anonymous_id())) {
           return;
         }
 

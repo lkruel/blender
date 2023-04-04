@@ -285,7 +285,6 @@ template<typename T> class SimpleMixer {
    */
   void set(const int64_t index, const T &value, const float weight = 1.0f)
   {
-    BLI_assert(weight >= 0.0f);
     buffer_[index] = value * weight;
     total_weights_[index] = weight;
   }
@@ -295,7 +294,6 @@ template<typename T> class SimpleMixer {
    */
   void mix_in(const int64_t index, const T &value, const float weight = 1.0f)
   {
-    BLI_assert(weight >= 0.0f);
     buffer_[index] += value * weight;
     total_weights_[index] += weight;
   }
@@ -370,13 +368,9 @@ class BooleanPropagationMixer {
   /**
    * Does not do anything, since the mixing is trivial.
    */
-  void finalize()
-  {
-  }
+  void finalize() {}
 
-  void finalize(const IndexMask /*mask*/)
-  {
-  }
+  void finalize(const IndexMask /*mask*/) {}
 };
 
 /**

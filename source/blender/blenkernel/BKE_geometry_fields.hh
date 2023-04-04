@@ -8,7 +8,6 @@
  * Common field utilities and field definitions for geometry components.
  */
 
-#include "BKE_attribute.h"
 #include "BKE_geometry_set.hh"
 
 #include "FN_field.hh"
@@ -63,9 +62,7 @@ class PointCloudFieldContext : public fn::FieldContext {
   const PointCloud &pointcloud_;
 
  public:
-  PointCloudFieldContext(const PointCloud &pointcloud) : pointcloud_(pointcloud)
-  {
-  }
+  PointCloudFieldContext(const PointCloud &pointcloud) : pointcloud_(pointcloud) {}
 
   const PointCloud &pointcloud() const
   {
@@ -78,9 +75,7 @@ class InstancesFieldContext : public fn::FieldContext {
   const Instances &instances_;
 
  public:
-  InstancesFieldContext(const Instances &instances) : instances_(instances)
-  {
-  }
+  InstancesFieldContext(const Instances &instances) : instances_(instances) {}
 
   const Instances &instances() const
   {
@@ -201,11 +196,14 @@ class AttributeFieldInput : public GeometryFieldInput {
     category_ = Category::NamedAttribute;
   }
 
+  static fn::GField Create(std::string name, const CPPType &type)
+  {
+    auto field_input = std::make_shared<AttributeFieldInput>(std::move(name), type);
+    return fn::GField(field_input);
+  }
   template<typename T> static fn::Field<T> Create(std::string name)
   {
-    const CPPType &type = CPPType::get<T>();
-    auto field_input = std::make_shared<AttributeFieldInput>(std::move(name), type);
-    return fn::Field<T>{field_input};
+    return fn::Field<T>(Create(std::move(name), CPPType::get<T>()));
   }
 
   StringRefNull attribute_name() const
@@ -261,18 +259,14 @@ class NormalFieldInput : public GeometryFieldInput {
 
 class AnonymousAttributeFieldInput : public GeometryFieldInput {
  private:
-  /**
-   * A strong reference is required to make sure that the referenced attribute is not removed
-   * automatically.
-   */
-  StrongAnonymousAttributeID anonymous_id_;
+  AutoAnonymousAttributeID anonymous_id_;
   std::string producer_name_;
 
  public:
-  AnonymousAttributeFieldInput(StrongAnonymousAttributeID anonymous_id,
+  AnonymousAttributeFieldInput(AutoAnonymousAttributeID anonymous_id,
                                const CPPType &type,
                                std::string producer_name)
-      : GeometryFieldInput(type, anonymous_id.debug_name()),
+      : GeometryFieldInput(type, anonymous_id->user_name()),
         anonymous_id_(std::move(anonymous_id)),
         producer_name_(producer_name)
   {
@@ -280,12 +274,17 @@ class AnonymousAttributeFieldInput : public GeometryFieldInput {
   }
 
   template<typename T>
-  static fn::Field<T> Create(StrongAnonymousAttributeID anonymous_id, std::string producer_name)
+  static fn::Field<T> Create(AutoAnonymousAttributeID anonymous_id, std::string producer_name)
   {
     const CPPType &type = CPPType::get<T>();
     auto field_input = std::make_shared<AnonymousAttributeFieldInput>(
         std::move(anonymous_id), type, std::move(producer_name));
     return fn::Field<T>{field_input};
+  }
+
+  const AutoAnonymousAttributeID &anonymous_id() const
+  {
+    return anonymous_id_;
   }
 
   GVArray get_varray_for_context(const GeometryFieldContext &context,
@@ -306,11 +305,18 @@ class CurveLengthFieldInput final : public CurvesFieldInput {
                                  IndexMask mask) const final;
   uint64_t hash() const override;
   bool is_equal_to(const fn::FieldNode &other) const override;
+  std::optional<eAttrDomain> preferred_domain(const bke::CurvesGeometry &curves) const final;
 };
 
 bool try_capture_field_on_geometry(GeometryComponent &component,
                                    const AttributeIDRef &attribute_id,
                                    const eAttrDomain domain,
+                                   const fn::GField &field);
+
+bool try_capture_field_on_geometry(GeometryComponent &component,
+                                   const AttributeIDRef &attribute_id,
+                                   const eAttrDomain domain,
+                                   const fn::Field<bool> &selection,
                                    const fn::GField &field);
 
 /**

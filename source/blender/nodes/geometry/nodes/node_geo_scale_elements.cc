@@ -2,6 +2,7 @@
 
 #include "BLI_array.hh"
 #include "BLI_disjoint_set.hh"
+#include "BLI_math_matrix.hh"
 #include "BLI_task.hh"
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
@@ -12,7 +13,7 @@
 #include "UI_interface.h"
 #include "UI_resources.h"
 
-#include "BKE_mesh.h"
+#include "BKE_mesh.hh"
 
 #include "node_geometry_util.hh"
 
@@ -21,19 +22,19 @@ namespace blender::nodes::node_geo_scale_elements_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>(N_("Geometry")).supported_type(GEO_COMPONENT_TYPE_MESH);
-  b.add_input<decl::Bool>(N_("Selection")).default_value(true).hide_value().supports_field();
-  b.add_input<decl::Float>(N_("Scale"), "Scale").default_value(1.0f).min(0.0f).supports_field();
+  b.add_input<decl::Bool>(N_("Selection")).default_value(true).hide_value().field_on_all();
+  b.add_input<decl::Float>(N_("Scale"), "Scale").default_value(1.0f).min(0.0f).field_on_all();
   b.add_input<decl::Vector>(N_("Center"))
       .subtype(PROP_TRANSLATION)
-      .implicit_field(implicit_field_inputs::position)
+      .implicit_field_on_all(implicit_field_inputs::position)
       .description(N_("Origin of the scaling for each element. If multiple elements are "
                       "connected, their center is averaged"));
   b.add_input<decl::Vector>(N_("Axis"))
       .default_value({1.0f, 0.0f, 0.0f})
-      .supports_field()
+      .field_on_all()
       .description(N_("Direction in which to scale the element"))
       .make_available([](bNode &node) { node.custom2 = GEO_NODE_SCALE_ELEMENTS_SINGLE_AXIS; });
-  b.add_output<decl::Geometry>(N_("Geometry"));
+  b.add_output<decl::Geometry>(N_("Geometry")).propagate_all();
 };
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
@@ -123,32 +124,32 @@ static float4x4 create_single_axis_transform(const float3 &center,
   float4x4 transform = float4x4::identity();
 
   /* Move scaling center to the origin. */
-  sub_v3_v3(transform.values[3], center);
+  transform.location() -= center;
 
   /* `base_change` and `base_change_inv` are used to rotate space so that scaling along the
    * provided axis is the same as scaling along the x axis. */
   float4x4 base_change = float4x4::identity();
-  copy_v3_v3(base_change.values[0], x_axis);
-  copy_v3_v3(base_change.values[1], y_axis);
-  copy_v3_v3(base_change.values[2], z_axis);
+  base_change.x_axis() = x_axis;
+  base_change.y_axis() = y_axis;
+  base_change.z_axis() = z_axis;
 
   /* Can invert by transposing, because the matrix is orthonormal. */
-  float4x4 base_change_inv = base_change.transposed();
+  float4x4 base_change_inv = math::transpose(base_change);
 
   float4x4 scale_transform = float4x4::identity();
-  scale_transform.values[0][0] = scale;
+  scale_transform[0][0] = scale;
 
   transform = base_change * scale_transform * base_change_inv * transform;
 
   /* Move scaling center back to where it was. */
-  add_v3_v3(transform.values[3], center);
+  transform.location() += center;
 
   return transform;
 }
 
 using GetVertexIndicesFn = FunctionRef<void(Span<MEdge> edges,
                                             Span<MPoly> polys,
-                                            Span<MLoop> loops,
+                                            Span<int> corner_verts,
                                             int element_index,
                                             VectorSet<int> &r_vertex_indices)>;
 
@@ -157,10 +158,10 @@ static void scale_vertex_islands_uniformly(Mesh &mesh,
                                            const UniformScaleParams &params,
                                            const GetVertexIndicesFn get_vertex_indices)
 {
-  MutableSpan<MVert> verts = mesh.verts_for_write();
+  MutableSpan<float3> positions = mesh.vert_positions_for_write();
   const Span<MEdge> edges = mesh.edges();
   const Span<MPoly> polys = mesh.polys();
-  const Span<MLoop> loops = mesh.loops();
+  const Span<int> corner_verts = mesh.corner_verts();
 
   threading::parallel_for(islands.index_range(), 256, [&](const IndexRange range) {
     for (const int island_index : range) {
@@ -171,7 +172,7 @@ static void scale_vertex_islands_uniformly(Mesh &mesh,
 
       VectorSet<int> vertex_indices;
       for (const int poly_index : island.element_indices) {
-        get_vertex_indices(edges, polys, loops, poly_index, vertex_indices);
+        get_vertex_indices(edges, polys, corner_verts, poly_index, vertex_indices);
         center += params.centers[poly_index];
         scale += params.scales[poly_index];
       }
@@ -182,15 +183,12 @@ static void scale_vertex_islands_uniformly(Mesh &mesh,
       center *= f;
 
       for (const int vert_index : vertex_indices) {
-        MVert &vert = verts[vert_index];
-        const float3 old_position = vert.co;
-        const float3 new_position = transform_with_uniform_scale(old_position, center, scale);
-        copy_v3_v3(vert.co, new_position);
+        positions[vert_index] = transform_with_uniform_scale(positions[vert_index], center, scale);
       }
     }
   });
 
-  BKE_mesh_tag_coords_changed(&mesh);
+  BKE_mesh_tag_positions_changed(&mesh);
 }
 
 static void scale_vertex_islands_on_axis(Mesh &mesh,
@@ -198,10 +196,10 @@ static void scale_vertex_islands_on_axis(Mesh &mesh,
                                          const AxisScaleParams &params,
                                          const GetVertexIndicesFn get_vertex_indices)
 {
-  MutableSpan<MVert> verts = mesh.verts_for_write();
+  MutableSpan<float3> positions = mesh.vert_positions_for_write();
   const Span<MEdge> edges = mesh.edges();
   const Span<MPoly> polys = mesh.polys();
-  const Span<MLoop> loops = mesh.loops();
+  const Span<int> corner_verts = mesh.corner_verts();
 
   threading::parallel_for(islands.index_range(), 256, [&](const IndexRange range) {
     for (const int island_index : range) {
@@ -213,7 +211,7 @@ static void scale_vertex_islands_on_axis(Mesh &mesh,
 
       VectorSet<int> vertex_indices;
       for (const int poly_index : island.element_indices) {
-        get_vertex_indices(edges, polys, loops, poly_index, vertex_indices);
+        get_vertex_indices(edges, polys, corner_verts, poly_index, vertex_indices);
         center += params.centers[poly_index];
         scale += params.scales[poly_index];
         axis += params.axis_vectors[poly_index];
@@ -231,33 +229,30 @@ static void scale_vertex_islands_on_axis(Mesh &mesh,
 
       const float4x4 transform = create_single_axis_transform(center, axis, scale);
       for (const int vert_index : vertex_indices) {
-        MVert &vert = verts[vert_index];
-        const float3 old_position = vert.co;
-        const float3 new_position = transform * old_position;
-        copy_v3_v3(vert.co, new_position);
+        positions[vert_index] = math::transform_point(transform, positions[vert_index]);
       }
     }
   });
 
-  BKE_mesh_tag_coords_changed(&mesh);
+  BKE_mesh_tag_positions_changed(&mesh);
 }
 
 static Vector<ElementIsland> prepare_face_islands(const Mesh &mesh, const IndexMask face_selection)
 {
   const Span<MPoly> polys = mesh.polys();
-  const Span<MLoop> loops = mesh.loops();
+  const Span<int> corner_verts = mesh.corner_verts();
 
   /* Use the disjoint set data structure to determine which vertices have to be scaled together. */
-  DisjointSet disjoint_set(mesh.totvert);
+  DisjointSet<int> disjoint_set(mesh.totvert);
   for (const int poly_index : face_selection) {
     const MPoly &poly = polys[poly_index];
-    const Span<MLoop> poly_loops = loops.slice(poly.loopstart, poly.totloop);
+    const Span<int> poly_verts = corner_verts.slice(poly.loopstart, poly.totloop);
     for (const int loop_index : IndexRange(poly.totloop - 1)) {
-      const int v1 = poly_loops[loop_index].v;
-      const int v2 = poly_loops[loop_index + 1].v;
+      const int v1 = poly_verts[loop_index];
+      const int v2 = poly_verts[loop_index + 1];
       disjoint_set.join(v1, v2);
     }
-    disjoint_set.join(poly_loops.first().v, poly_loops.last().v);
+    disjoint_set.join(poly_verts.first(), poly_verts.last());
   }
 
   VectorSet<int> island_ids;
@@ -268,8 +263,8 @@ static Vector<ElementIsland> prepare_face_islands(const Mesh &mesh, const IndexM
   /* Gather all of the face indices in each island into separate vectors. */
   for (const int poly_index : face_selection) {
     const MPoly &poly = polys[poly_index];
-    const Span<MLoop> poly_loops = loops.slice(poly.loopstart, poly.totloop);
-    const int island_id = disjoint_set.find_root(poly_loops[0].v);
+    const Span<int> poly_verts = corner_verts.slice(poly.loopstart, poly.totloop);
+    const int island_id = disjoint_set.find_root(poly_verts[0]);
     const int island_index = island_ids.index_of_or_add(island_id);
     if (island_index == islands.size()) {
       islands.append_as();
@@ -283,15 +278,12 @@ static Vector<ElementIsland> prepare_face_islands(const Mesh &mesh, const IndexM
 
 static void get_face_verts(const Span<MEdge> /*edges*/,
                            const Span<MPoly> polys,
-                           const Span<MLoop> loops,
+                           const Span<int> corner_verts,
                            int face_index,
                            VectorSet<int> &r_vertex_indices)
 {
   const MPoly &poly = polys[face_index];
-  const Span<MLoop> poly_loops = loops.slice(poly.loopstart, poly.totloop);
-  for (const MLoop &loop : poly_loops) {
-    r_vertex_indices.add(loop.v);
-  }
+  r_vertex_indices.add_multiple(corner_verts.slice(poly.loopstart, poly.totloop));
 }
 
 static AxisScaleParams evaluate_axis_scale_fields(FieldEvaluator &evaluator,
@@ -344,7 +336,7 @@ static Vector<ElementIsland> prepare_edge_islands(const Mesh &mesh, const IndexM
   const Span<MEdge> edges = mesh.edges();
 
   /* Use the disjoint set data structure to determine which vertices have to be scaled together. */
-  DisjointSet disjoint_set(mesh.totvert);
+  DisjointSet<int> disjoint_set(mesh.totvert);
   for (const int edge_index : edge_selection) {
     const MEdge &edge = edges[edge_index];
     disjoint_set.join(edge.v1, edge.v2);
@@ -372,7 +364,7 @@ static Vector<ElementIsland> prepare_edge_islands(const Mesh &mesh, const IndexM
 
 static void get_edge_verts(const Span<MEdge> edges,
                            const Span<MPoly> /*polys*/,
-                           const Span<MLoop> /*loops*/,
+                           const Span<int> /*corner_verts*/,
                            int edge_index,
                            VectorSet<int> &r_vertex_indices)
 {

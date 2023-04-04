@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2013 Blender Foundation. All rights reserved. */
+ * Copyright 2013 Blender Foundation */
 
 /** \file
  * \ingroup GHOST
@@ -516,7 +516,7 @@ GHOST_TSuccess GHOST_ContextCGL::releaseNativeHandles()
 
 /* OpenGL on Metal
  *
- * Use Metal layer to avoid Viewport lagging on macOS, see T60043. */
+ * Use Metal layer to avoid Viewport lagging on macOS, see #60043. */
 
 static const MTLPixelFormat METAL_FRAMEBUFFERPIXEL_FORMAT = MTLPixelFormatBGRA8Unorm;
 static const OSType METAL_CORE_VIDEO_PIXEL_FORMAT = kCVPixelFormatType_32BGRA;
@@ -529,7 +529,8 @@ void GHOST_ContextCGL::metalInit()
     id<MTLDevice> device = m_metalLayer.device;
 
     /* Create a command queue for blit/present operation. */
-    m_metalCmdQueue = (MTLCommandQueue *)[device newCommandQueue];
+    m_metalCmdQueue = (MTLCommandQueue *)[device
+        newCommandQueueWithMaxCommandBufferCount:GHOST_ContextCGL::max_command_buffer_count];
     [m_metalCmdQueue retain];
 
     /* Create shaders for blit operation. */

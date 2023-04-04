@@ -854,7 +854,7 @@ static double get_cur_time(Scene *scene)
 {
   /* We divide by the current framelen to take into account time remapping.
    * Otherwise we will get the wrong starting time which will break A/V sync.
-   * See T74111 for further details. */
+   * See #74111 for further details. */
   return FRA2TIME((scene->r.cfra + scene->r.subframe) / (double)scene->r.framelen);
 }
 
@@ -1230,7 +1230,7 @@ bool BKE_sound_info_get(struct Main *main, struct bSound *sound, SoundInfo *soun
   }
   /* TODO(sergey): Make it fully independent audio handle. */
   /* Don't free waveforms during non-destructive queries.
-   * This causes unnecessary recalculation - see T69921 */
+   * This causes unnecessary recalculation - see #69921 */
   sound_load_audio(main, sound, false);
   const bool result = sound_info_from_playback_handle(sound->playback_handle, sound_info);
   sound_free_audio(sound);
@@ -1281,48 +1281,20 @@ bool BKE_sound_stream_info_get(struct Main *main,
 
 #  include "BLI_utildefines.h"
 
-void BKE_sound_force_device(const char *UNUSED(device))
-{
-}
-void BKE_sound_init_once(void)
-{
-}
-void BKE_sound_init(Main *UNUSED(bmain))
-{
-}
-void BKE_sound_exit(void)
-{
-}
-void BKE_sound_exit_once(void)
-{
-}
-void BKE_sound_cache(bSound *UNUSED(sound))
-{
-}
-void BKE_sound_delete_cache(bSound *UNUSED(sound))
-{
-}
-void BKE_sound_load(Main *UNUSED(bmain), bSound *UNUSED(sound))
-{
-}
-void BKE_sound_create_scene(Scene *UNUSED(scene))
-{
-}
-void BKE_sound_destroy_scene(Scene *UNUSED(scene))
-{
-}
-void BKE_sound_lock(void)
-{
-}
-void BKE_sound_unlock(void)
-{
-}
-void BKE_sound_reset_scene_specs(Scene *UNUSED(scene))
-{
-}
-void BKE_sound_mute_scene(Scene *UNUSED(scene), int UNUSED(muted))
-{
-}
+void BKE_sound_force_device(const char *UNUSED(device)) {}
+void BKE_sound_init_once(void) {}
+void BKE_sound_init(Main *UNUSED(bmain)) {}
+void BKE_sound_exit(void) {}
+void BKE_sound_exit_once(void) {}
+void BKE_sound_cache(bSound *UNUSED(sound)) {}
+void BKE_sound_delete_cache(bSound *UNUSED(sound)) {}
+void BKE_sound_load(Main *UNUSED(bmain), bSound *UNUSED(sound)) {}
+void BKE_sound_create_scene(Scene *UNUSED(scene)) {}
+void BKE_sound_destroy_scene(Scene *UNUSED(scene)) {}
+void BKE_sound_lock(void) {}
+void BKE_sound_unlock(void) {}
+void BKE_sound_reset_scene_specs(Scene *UNUSED(scene)) {}
+void BKE_sound_mute_scene(Scene *UNUSED(scene), int UNUSED(muted)) {}
 void *BKE_sound_scene_add_scene_sound(Scene *UNUSED(scene),
                                       Sequence *UNUSED(sequence),
                                       int UNUSED(startframe),
@@ -1347,12 +1319,8 @@ void *BKE_sound_add_scene_sound_defaults(Scene *UNUSED(scene), Sequence *UNUSED(
 {
   return NULL;
 }
-void BKE_sound_remove_scene_sound(Scene *UNUSED(scene), void *UNUSED(handle))
-{
-}
-void BKE_sound_mute_scene_sound(void *UNUSED(handle), bool UNUSED(mute))
-{
-}
+void BKE_sound_remove_scene_sound(Scene *UNUSED(scene), void *UNUSED(handle)) {}
+void BKE_sound_mute_scene_sound(void *UNUSED(handle), bool UNUSED(mute)) {}
 void BKE_sound_move_scene_sound(const Scene *UNUSED(scene),
                                 void *UNUSED(handle),
                                 int UNUSED(startframe),
@@ -1361,18 +1329,10 @@ void BKE_sound_move_scene_sound(const Scene *UNUSED(scene),
                                 double UNUSED(audio_offset))
 {
 }
-void BKE_sound_move_scene_sound_defaults(Scene *UNUSED(scene), Sequence *UNUSED(sequence))
-{
-}
-void BKE_sound_play_scene(Scene *UNUSED(scene))
-{
-}
-void BKE_sound_stop_scene(Scene *UNUSED(scene))
-{
-}
-void BKE_sound_seek_scene(Main *UNUSED(bmain), Scene *UNUSED(scene))
-{
-}
+void BKE_sound_move_scene_sound_defaults(Scene *UNUSED(scene), Sequence *UNUSED(sequence)) {}
+void BKE_sound_play_scene(Scene *UNUSED(scene)) {}
+void BKE_sound_stop_scene(Scene *UNUSED(scene)) {}
+void BKE_sound_seek_scene(Main *UNUSED(bmain), Scene *UNUSED(scene)) {}
 double BKE_sound_sync_scene(Scene *UNUSED(scene))
 {
   return NAN_FLT;
@@ -1388,27 +1348,13 @@ void BKE_sound_read_waveform(Main *bmain,
 {
   UNUSED_VARS(sound, stop, bmain);
 }
-void BKE_sound_init_main(Main *UNUSED(bmain))
-{
-}
-void BKE_sound_set_cfra(int UNUSED(cfra))
-{
-}
-void BKE_sound_update_sequencer(Main *UNUSED(main), bSound *UNUSED(sound))
-{
-}
-void BKE_sound_update_scene(Depsgraph *UNUSED(depsgraph), Scene *UNUSED(scene))
-{
-}
-void BKE_sound_update_scene_sound(void *UNUSED(handle), bSound *UNUSED(sound))
-{
-}
-void BKE_sound_update_scene_listener(Scene *UNUSED(scene))
-{
-}
-void BKE_sound_update_fps(Main *UNUSED(bmain), Scene *UNUSED(scene))
-{
-}
+void BKE_sound_init_main(Main *UNUSED(bmain)) {}
+void BKE_sound_set_cfra(int UNUSED(cfra)) {}
+void BKE_sound_update_sequencer(Main *UNUSED(main), bSound *UNUSED(sound)) {}
+void BKE_sound_update_scene(Depsgraph *UNUSED(depsgraph), Scene *UNUSED(scene)) {}
+void BKE_sound_update_scene_sound(void *UNUSED(handle), bSound *UNUSED(sound)) {}
+void BKE_sound_update_scene_listener(Scene *UNUSED(scene)) {}
+void BKE_sound_update_fps(Main *UNUSED(bmain), Scene *UNUSED(scene)) {}
 void BKE_sound_set_scene_sound_volume(void *UNUSED(handle),
                                       float UNUSED(volume),
                                       char UNUSED(animated))
@@ -1417,9 +1363,7 @@ void BKE_sound_set_scene_sound_volume(void *UNUSED(handle),
 void BKE_sound_set_scene_sound_pan(void *UNUSED(handle), float UNUSED(pan), char UNUSED(animated))
 {
 }
-void BKE_sound_set_scene_volume(Scene *UNUSED(scene), float UNUSED(volume))
-{
-}
+void BKE_sound_set_scene_volume(Scene *UNUSED(scene), float UNUSED(volume)) {}
 void BKE_sound_set_scene_sound_pitch(void *UNUSED(handle),
                                      float UNUSED(pitch),
                                      char UNUSED(animated))
@@ -1435,9 +1379,7 @@ char **BKE_sound_get_device_names(void)
   return names;
 }
 
-void BKE_sound_free_waveform(bSound *UNUSED(sound))
-{
-}
+void BKE_sound_free_waveform(bSound *UNUSED(sound)) {}
 
 bool BKE_sound_info_get(struct Main *UNUSED(main),
                         struct bSound *UNUSED(sound),
@@ -1522,6 +1464,12 @@ void BKE_sound_jack_scene_update(Scene *scene, int mode, double time)
 void BKE_sound_evaluate(Depsgraph *depsgraph, Main *bmain, bSound *sound)
 {
   DEG_debug_print_eval(depsgraph, __func__, sound->id.name, sound);
+  if (sound->id.recalc & ID_RECALC_SOURCE) {
+    /* Sequencer checks this flag to see if the strip sound is to be updated from the Audaspace
+     * side. */
+    sound->id.recalc |= ID_RECALC_AUDIO;
+  }
+
   if (sound->id.recalc & ID_RECALC_AUDIO) {
     BKE_sound_load(bmain, sound);
     return;

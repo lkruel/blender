@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2007 Blender Foundation. All rights reserved. */
+ * Copyright 2007 Blender Foundation */
 
 /** \file
  * \ingroup render
@@ -18,10 +18,8 @@ struct ImBuf;
 struct ListBase;
 struct Render;
 struct RenderData;
-struct RenderEngine;
 struct RenderLayer;
 struct RenderResult;
-struct Scene;
 struct rcti;
 
 #ifdef __cplusplus

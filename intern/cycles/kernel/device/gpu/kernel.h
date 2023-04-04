@@ -136,7 +136,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
 {
   const int global_index = ccl_gpu_global_id_x();
 
-  if (global_index < work_size) {
+  if (ccl_gpu_kernel_within_bounds(global_index, work_size)) {
     const int state = (path_index_array) ? path_index_array[global_index] : global_index;
     ccl_gpu_kernel_call(integrator_intersect_closest(NULL, state, render_buffer));
   }
@@ -150,7 +150,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
 {
   const int global_index = ccl_gpu_global_id_x();
 
-  if (global_index < work_size) {
+  if (ccl_gpu_kernel_within_bounds(global_index, work_size)) {
     const int state = (path_index_array) ? path_index_array[global_index] : global_index;
     ccl_gpu_kernel_call(integrator_intersect_shadow(NULL, state));
   }
@@ -164,7 +164,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
 {
   const int global_index = ccl_gpu_global_id_x();
 
-  if (global_index < work_size) {
+  if (ccl_gpu_kernel_within_bounds(global_index, work_size)) {
     const int state = (path_index_array) ? path_index_array[global_index] : global_index;
     ccl_gpu_kernel_call(integrator_intersect_subsurface(NULL, state));
   }
@@ -178,7 +178,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
 {
   const int global_index = ccl_gpu_global_id_x();
 
-  if (global_index < work_size) {
+  if (ccl_gpu_kernel_within_bounds(global_index, work_size)) {
     const int state = (path_index_array) ? path_index_array[global_index] : global_index;
     ccl_gpu_kernel_call(integrator_intersect_volume_stack(NULL, state));
   }
@@ -193,7 +193,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
 {
   const int global_index = ccl_gpu_global_id_x();
 
-  if (global_index < work_size) {
+  if (ccl_gpu_kernel_within_bounds(global_index, work_size)) {
     const int state = (path_index_array) ? path_index_array[global_index] : global_index;
     ccl_gpu_kernel_call(integrator_shade_background(NULL, state, render_buffer));
   }
@@ -208,7 +208,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
 {
   const int global_index = ccl_gpu_global_id_x();
 
-  if (global_index < work_size) {
+  if (ccl_gpu_kernel_within_bounds(global_index, work_size)) {
     const int state = (path_index_array) ? path_index_array[global_index] : global_index;
     ccl_gpu_kernel_call(integrator_shade_light(NULL, state, render_buffer));
   }
@@ -223,7 +223,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
 {
   const int global_index = ccl_gpu_global_id_x();
 
-  if (global_index < work_size) {
+  if (ccl_gpu_kernel_within_bounds(global_index, work_size)) {
     const int state = (path_index_array) ? path_index_array[global_index] : global_index;
     ccl_gpu_kernel_call(integrator_shade_shadow(NULL, state, render_buffer));
   }
@@ -238,7 +238,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
 {
   const int global_index = ccl_gpu_global_id_x();
 
-  if (global_index < work_size) {
+  if (ccl_gpu_kernel_within_bounds(global_index, work_size)) {
     const int state = (path_index_array) ? path_index_array[global_index] : global_index;
     ccl_gpu_kernel_call(integrator_shade_surface(NULL, state, render_buffer));
   }
@@ -257,7 +257,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
 {
   const int global_index = ccl_gpu_global_id_x();
 
-  if (global_index < work_size) {
+  if (ccl_gpu_kernel_within_bounds(global_index, work_size)) {
     const int state = (path_index_array) ? path_index_array[global_index] : global_index;
 
 #if defined(__KERNEL_METAL_APPLE__) && defined(__METALRT__)
@@ -281,7 +281,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
 {
   const int global_index = ccl_gpu_global_id_x();
 
-  if (global_index < work_size) {
+  if (ccl_gpu_kernel_within_bounds(global_index, work_size)) {
     const int state = (path_index_array) ? path_index_array[global_index] : global_index;
     ccl_gpu_kernel_call(integrator_shade_surface_mnee(NULL, state, render_buffer));
   }
@@ -296,7 +296,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
 {
   const int global_index = ccl_gpu_global_id_x();
 
-  if (global_index < work_size) {
+  if (ccl_gpu_kernel_within_bounds(global_index, work_size)) {
     const int state = (path_index_array) ? path_index_array[global_index] : global_index;
     ccl_gpu_kernel_call(integrator_shade_volume(NULL, state, render_buffer));
   }
@@ -314,11 +314,7 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE)
                         int kernel_index);
   ccl_gpu_kernel_lambda_pass.kernel_index = kernel_index;
 
-  gpu_parallel_active_index_array(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE,
-                                  num_states,
-                                  indices,
-                                  num_indices,
-                                  ccl_gpu_kernel_lambda_pass);
+  gpu_parallel_active_index_array(num_states, indices, num_indices, ccl_gpu_kernel_lambda_pass);
 }
 ccl_gpu_kernel_postfix
 
@@ -333,11 +329,7 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE)
                         int kernel_index);
   ccl_gpu_kernel_lambda_pass.kernel_index = kernel_index;
 
-  gpu_parallel_active_index_array(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE,
-                                  num_states,
-                                  indices,
-                                  num_indices,
-                                  ccl_gpu_kernel_lambda_pass);
+  gpu_parallel_active_index_array(num_states, indices, num_indices, ccl_gpu_kernel_lambda_pass);
 }
 ccl_gpu_kernel_postfix
 
@@ -349,11 +341,7 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE)
 {
   ccl_gpu_kernel_lambda(INTEGRATOR_STATE(state, path, queued_kernel) != 0);
 
-  gpu_parallel_active_index_array(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE,
-                                  num_states,
-                                  indices,
-                                  num_indices,
-                                  ccl_gpu_kernel_lambda_pass);
+  gpu_parallel_active_index_array(num_states, indices, num_indices, ccl_gpu_kernel_lambda_pass);
 }
 ccl_gpu_kernel_postfix
 
@@ -366,11 +354,8 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE)
 {
   ccl_gpu_kernel_lambda(INTEGRATOR_STATE(state, path, queued_kernel) == 0);
 
-  gpu_parallel_active_index_array(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE,
-                                  num_states,
-                                  indices + indices_offset,
-                                  num_indices,
-                                  ccl_gpu_kernel_lambda_pass);
+  gpu_parallel_active_index_array(
+      num_states, indices + indices_offset, num_indices, ccl_gpu_kernel_lambda_pass);
 }
 ccl_gpu_kernel_postfix
 
@@ -383,11 +368,8 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE)
 {
   ccl_gpu_kernel_lambda(INTEGRATOR_STATE(state, shadow_path, queued_kernel) == 0);
 
-  gpu_parallel_active_index_array(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE,
-                                  num_states,
-                                  indices + indices_offset,
-                                  num_indices,
-                                  ccl_gpu_kernel_lambda_pass);
+  gpu_parallel_active_index_array(
+      num_states, indices + indices_offset, num_indices, ccl_gpu_kernel_lambda_pass);
 }
 ccl_gpu_kernel_postfix
 
@@ -419,6 +401,72 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_SORTED_INDEX_DEFAULT_BLOCK_SIZE)
 }
 ccl_gpu_kernel_postfix
 
+ccl_gpu_kernel_threads(GPU_PARALLEL_SORT_BLOCK_SIZE)
+    ccl_gpu_kernel_signature(integrator_sort_bucket_pass,
+                             int num_states,
+                             int partition_size,
+                             int num_states_limit,
+                             ccl_global int *indices,
+                             int kernel_index)
+{
+#if defined(__KERNEL_LOCAL_ATOMIC_SORT__)
+  int max_shaders = context.launch_params_metal.data.max_shaders;
+  ccl_global ushort *d_queued_kernel = (ccl_global ushort *)
+                                           kernel_integrator_state.path.queued_kernel;
+  ccl_global uint *d_shader_sort_key = (ccl_global uint *)
+                                           kernel_integrator_state.path.shader_sort_key;
+  ccl_global int *key_offsets = (ccl_global int *)
+                                    kernel_integrator_state.sort_partition_key_offsets;
+
+  gpu_parallel_sort_bucket_pass(num_states,
+                                partition_size,
+                                max_shaders,
+                                kernel_index,
+                                d_queued_kernel,
+                                d_shader_sort_key,
+                                key_offsets,
+                                (threadgroup int *)threadgroup_array,
+                                metal_local_id,
+                                metal_local_size,
+                                metal_grid_id);
+#endif
+}
+ccl_gpu_kernel_postfix
+
+ccl_gpu_kernel_threads(GPU_PARALLEL_SORT_BLOCK_SIZE)
+    ccl_gpu_kernel_signature(integrator_sort_write_pass,
+                             int num_states,
+                             int partition_size,
+                             int num_states_limit,
+                             ccl_global int *indices,
+                             int kernel_index)
+{
+#if defined(__KERNEL_LOCAL_ATOMIC_SORT__)
+  int max_shaders = context.launch_params_metal.data.max_shaders;
+  ccl_global ushort *d_queued_kernel = (ccl_global ushort *)
+                                           kernel_integrator_state.path.queued_kernel;
+  ccl_global uint *d_shader_sort_key = (ccl_global uint *)
+                                           kernel_integrator_state.path.shader_sort_key;
+  ccl_global int *key_offsets = (ccl_global int *)
+                                    kernel_integrator_state.sort_partition_key_offsets;
+
+  gpu_parallel_sort_write_pass(num_states,
+                               partition_size,
+                               max_shaders,
+                               kernel_index,
+                               num_states_limit,
+                               indices,
+                               d_queued_kernel,
+                               d_shader_sort_key,
+                               key_offsets,
+                               (threadgroup int *)threadgroup_array,
+                               metal_local_id,
+                               metal_local_size,
+                               metal_grid_id);
+#endif
+}
+ccl_gpu_kernel_postfix
+
 ccl_gpu_kernel_threads(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE)
     ccl_gpu_kernel_signature(integrator_compact_paths_array,
                              int num_states,
@@ -431,11 +479,7 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE)
                         int num_active_paths);
   ccl_gpu_kernel_lambda_pass.num_active_paths = num_active_paths;
 
-  gpu_parallel_active_index_array(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE,
-                                  num_states,
-                                  indices,
-                                  num_indices,
-                                  ccl_gpu_kernel_lambda_pass);
+  gpu_parallel_active_index_array(num_states, indices, num_indices, ccl_gpu_kernel_lambda_pass);
 }
 ccl_gpu_kernel_postfix
 
@@ -448,7 +492,7 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_SORTED_INDEX_DEFAULT_BLOCK_SIZE)
 {
   const int global_index = ccl_gpu_global_id_x();
 
-  if (global_index < work_size) {
+  if (ccl_gpu_kernel_within_bounds(global_index, work_size)) {
     const int from_state = active_terminated_states[active_states_offset + global_index];
     const int to_state = active_terminated_states[terminated_states_offset + global_index];
 
@@ -469,11 +513,7 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE)
                         int num_active_paths);
   ccl_gpu_kernel_lambda_pass.num_active_paths = num_active_paths;
 
-  gpu_parallel_active_index_array(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE,
-                                  num_states,
-                                  indices,
-                                  num_indices,
-                                  ccl_gpu_kernel_lambda_pass);
+  gpu_parallel_active_index_array(num_states, indices, num_indices, ccl_gpu_kernel_lambda_pass);
 }
 ccl_gpu_kernel_postfix
 
@@ -486,7 +526,7 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_SORTED_INDEX_DEFAULT_BLOCK_SIZE)
 {
   const int global_index = ccl_gpu_global_id_x();
 
-  if (global_index < work_size) {
+  if (ccl_gpu_kernel_within_bounds(global_index, work_size)) {
     const int from_state = active_terminated_states[active_states_offset + global_index];
     const int to_state = active_terminated_states[terminated_states_offset + global_index];
 
@@ -605,7 +645,7 @@ ccl_device_inline void kernel_gpu_film_convert_half_write(ccl_global uchar4 *rgb
                                                           const int y,
                                                           const half4 half_pixel)
 {
-  /* Work around HIP issue with half float display, see T92972. */
+  /* Work around HIP issue with half float display, see #92972. */
 #ifdef __KERNEL_HIP__
   ccl_global half *out = ((ccl_global half *)rgba) + (rgba_offset + y * rgba_stride + x) * 4;
   out[0] = half_pixel.x;

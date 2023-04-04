@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2012 Blender Foundation. All rights reserved. */
+ * Copyright 2012 Blender Foundation */
 
 #pragma once
 
@@ -19,7 +19,6 @@ extern "C" {
 struct ColorManagedColorspaceSettings;
 struct ColorManagedDisplaySettings;
 struct ColorManagedViewSettings;
-struct ColorManagedOutputSettings;
 struct ColormanageProcessor;
 struct EnumPropertyItem;
 struct ImBuf;

@@ -565,6 +565,12 @@ GHOST_TSuccess GHOST_SetDrawingContextType(GHOST_WindowHandle windowhandle,
   return window->setDrawingContextType(type);
 }
 
+GHOST_ContextHandle GHOST_GetDrawingContext(GHOST_WindowHandle windowhandle)
+{
+  GHOST_IWindow *window = (GHOST_IWindow *)windowhandle;
+  return (GHOST_ContextHandle)window->getDrawingContext();
+}
+
 void GHOST_SetTitle(GHOST_WindowHandle windowhandle, const char *title)
 {
   GHOST_IWindow *window = (GHOST_IWindow *)windowhandle;
@@ -889,16 +895,10 @@ bool GHOST_UseNativePixels(void)
   return system->useNativePixel();
 }
 
-bool GHOST_SupportsCursorWarp(void)
+GHOST_TCapabilityFlag GHOST_GetCapabilities(void)
 {
   GHOST_ISystem *system = GHOST_ISystem::getSystem();
-  return system->supportsCursorWarp();
-}
-
-bool GHOST_SupportsWindowPosition(void)
-{
-  GHOST_ISystem *system = GHOST_ISystem::getSystem();
-  return system->supportsWindowPosition();
+  return system->getCapabilities();
 }
 
 void GHOST_SetBacktraceHandler(GHOST_TBacktraceFn backtrace_fn)
@@ -910,6 +910,12 @@ void GHOST_UseWindowFocus(bool use_focus)
 {
   GHOST_ISystem *system = GHOST_ISystem::getSystem();
   return system->useWindowFocus(use_focus);
+}
+
+void GHOST_SetAutoFocus(bool auto_focus)
+{
+  GHOST_ISystem *system = GHOST_ISystem::getSystem();
+  system->setAutoFocus(auto_focus);
 }
 
 float GHOST_GetNativePixelSize(GHOST_WindowHandle windowhandle)
@@ -1190,3 +1196,36 @@ int GHOST_XrGetControllerModelData(GHOST_XrContextHandle xr_contexthandle,
 }
 
 #endif /* WITH_XR_OPENXR */
+
+#ifdef WITH_VULKAN_BACKEND
+
+void GHOST_GetVulkanHandles(GHOST_ContextHandle contexthandle,
+                            void *r_instance,
+                            void *r_physical_device,
+                            void *r_device,
+                            uint32_t *r_graphic_queue_family,
+                            void *r_queue)
+{
+  GHOST_IContext *context = (GHOST_IContext *)contexthandle;
+  context->getVulkanHandles(
+      r_instance, r_physical_device, r_device, r_graphic_queue_family, r_queue);
+}
+
+void GHOST_GetVulkanCommandBuffer(GHOST_ContextHandle contexthandle, void *r_command_buffer)
+{
+  GHOST_IContext *context = (GHOST_IContext *)contexthandle;
+  context->getVulkanCommandBuffer(r_command_buffer);
+}
+
+void GHOST_GetVulkanBackbuffer(GHOST_WindowHandle windowhandle,
+                               void *image,
+                               void *framebuffer,
+                               void *render_pass,
+                               void *extent,
+                               uint32_t *fb_id)
+{
+  GHOST_IWindow *window = (GHOST_IWindow *)windowhandle;
+  window->getVulkanBackbuffer(image, framebuffer, render_pass, extent, fb_id);
+}
+
+#endif /* WITH_VULKAN_BACKEND */

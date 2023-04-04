@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2005 Blender Foundation. All rights reserved. */
+ * Copyright 2005 Blender Foundation */
 
 /** \file
  * \ingroup gpu
@@ -39,8 +39,11 @@ void GPU_uniformbuf_free(GPUUniformBuf *ubo);
 void GPU_uniformbuf_update(GPUUniformBuf *ubo, const void *data);
 
 void GPU_uniformbuf_bind(GPUUniformBuf *ubo, int slot);
+void GPU_uniformbuf_bind_as_ssbo(GPUUniformBuf *ubo, int slot);
 void GPU_uniformbuf_unbind(GPUUniformBuf *ubo);
 void GPU_uniformbuf_unbind_all(void);
+
+void GPU_uniformbuf_clear_to_zero(GPUUniformBuf *ubo);
 
 #define GPU_UBO_BLOCK_NAME "node_tree"
 #define GPU_ATTRIBUTE_UBO_BLOCK_NAME "unf_attrs"

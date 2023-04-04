@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2013 Blender Foundation. All rights reserved. */
+ * Copyright 2013 Blender Foundation */
 
 /** \file
  * \ingroup depsgraph
@@ -161,7 +161,7 @@ struct Node {
     /* Reset counters needed for the current graph evaluation, does not
      * touch averaging accumulators. */
     void reset_current();
-    /* Time spend on this node during current graph evaluation. */
+    /* Time spent on this node during current graph evaluation. */
     double current_time;
   };
   /* Relationships between nodes
@@ -189,13 +189,9 @@ struct Node {
   /** Generic identifier for Depsgraph Nodes. */
   virtual string identifier() const;
 
-  virtual void init(const ID * /*id*/, const char * /*subdata*/)
-  {
-  }
+  virtual void init(const ID * /*id*/, const char * /*subdata*/) {}
 
-  virtual void tag_update(Depsgraph * /*graph*/, eUpdateSource /*source*/)
-  {
-  }
+  virtual void tag_update(Depsgraph * /*graph*/, eUpdateSource /*source*/) {}
 
   virtual OperationNode *get_entry_operation()
   {

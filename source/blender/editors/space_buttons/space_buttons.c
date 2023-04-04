@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2008 Blender Foundation. All rights reserved. */
+ * Copyright 2008 Blender Foundation */
 
 /** \file
  * \ingroup spbuttons
@@ -15,7 +15,7 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_context.h"
-#include "BKE_gpencil_modifier.h" /* Types for registering panels. */
+#include "BKE_gpencil_modifier_legacy.h" /* Types for registering panels. */
 #include "BKE_lib_remap.h"
 #include "BKE_modifier.h"
 #include "BKE_screen.h"
@@ -793,7 +793,7 @@ static void buttons_area_listener(const wmSpaceTypeListenerParams *params)
       }
       break;
     case NC_ID:
-      if (wmn->action == NA_RENAME) {
+      if (ELEM(wmn->action, NA_RENAME, NA_EDITED)) {
         ED_area_tag_redraw(area);
       }
       break;

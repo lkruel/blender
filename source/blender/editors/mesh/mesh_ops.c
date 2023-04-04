@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2009 Blender Foundation. All rights reserved. */
+ * Copyright 2009 Blender Foundation */
 
 /** \file
  * \ingroup edmesh
@@ -53,6 +53,8 @@ void ED_operatortypes_mesh(void)
   WM_operatortype_append(MESH_OT_primitive_ico_sphere_add);
 
   WM_operatortype_append(MESH_OT_primitive_cube_add_gizmo);
+
+  WM_operatortype_append(MESH_OT_attribute_set);
 
   WM_operatortype_append(MESH_OT_duplicate);
   WM_operatortype_append(MESH_OT_remove_doubles);
@@ -193,6 +195,7 @@ void ED_operatortypes_mesh(void)
   WM_operatortype_append(MESH_OT_average_normals);
   WM_operatortype_append(MESH_OT_smooth_normals);
   WM_operatortype_append(MESH_OT_mod_weighted_strength);
+  WM_operatortype_append(MESH_OT_flip_quad_tessellation);
 }
 
 #if 0 /* UNUSED, remove? */

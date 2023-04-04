@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2020 Blender Foundation. All rights reserved. */
+ * Copyright 2020 Blender Foundation */
 
 /** \file
  * \ingroup gpu
@@ -37,8 +37,7 @@ class GLVertBuf : public VertBuf {
 
   void update_sub(uint start, uint len, const void *data) override;
 
-  const void *read() const override;
-  void *unmap(const void *mapped_data) const override;
+  void read(void *data) const override;
 
   void wrap_handle(uint64_t handle) override;
 

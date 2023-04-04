@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2007 Blender Foundation. All rights reserved. */
+ * Copyright 2007 Blender Foundation */
 
 /** \file
  * \ingroup wm
@@ -88,7 +88,7 @@ void wm_jobs_timer(wmWindowManager *wm, wmTimer *wt);
  */
 void wm_jobs_timer_end(wmWindowManager *wm, wmTimer *wt);
 
-/* wm_files.c */
+/* wm_files.cc */
 
 /**
  * Run the auto-save timer action.

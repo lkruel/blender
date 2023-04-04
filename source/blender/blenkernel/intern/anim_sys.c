@@ -2935,7 +2935,7 @@ static void nlastrip_evaluate_meta(const int evaluation_mode,
                   STRIP_EVAL_NOBLEND));
 
   /* directly evaluate child strip into accumulation buffer...
-   * - there's no need to use a temporary buffer (as it causes issues [T40082])
+   * - there's no need to use a temporary buffer (as it causes issues [#40082])
    */
   if (tmp_nes) {
     nlastrip_evaluate(evaluation_mode,
@@ -3342,7 +3342,7 @@ static bool is_action_track_evaluated_without_nla(const AnimData *adt,
  * sure why. Preferably, it would be as simple as checking for `(adt->act_Track == nlt)` but that
  * doesn't work either, neither does comparing indices.
  *
- *  This function is a temporary work around. The first disabled track is always the tweaked track.
+ * This function is a temporary work around. The first disabled track is always the tweaked track.
  */
 static NlaTrack *nlatrack_find_tweaked(const AnimData *adt)
 {
@@ -3822,12 +3822,12 @@ void BKE_animsys_nla_remap_keyframe_values(struct NlaKeyframingContext *context,
   NlaEvalChannelSnapshot *blended_necs = nlaeval_snapshot_ensure_channel(&blended_snapshot, nec);
   memcpy(blended_necs->values, values, sizeof(float) * count);
 
-  /* Force all channels to be remapped for quaternions in a Combine strip, otherwise it will
-   * always fail. See nlaevalchan_combine_quaternion_handle_undefined_blend_values().
+  /* Force all channels to be remapped for quaternions in a Combine or Replace strip, otherwise it
+   * will always fail. See nlaevalchan_combine_quaternion_handle_undefined_blend_values().
    */
   const bool can_force_all = r_force_all != NULL;
   if (blended_necs->channel->mix_mode == NEC_MIX_QUATERNION &&
-      blend_mode == NLASTRIP_MODE_COMBINE && can_force_all) {
+      ELEM(blend_mode, NLASTRIP_MODE_COMBINE, NLASTRIP_MODE_REPLACE) && can_force_all) {
 
     *r_force_all = true;
     index = -1;
@@ -4218,7 +4218,7 @@ void BKE_animsys_eval_driver(Depsgraph *depsgraph, ID *id, int driver_index, FCu
         const float curval = calculate_fcurve(&anim_rna, fcu, &anim_eval_context);
         ok = BKE_animsys_write_to_rna_path(&anim_rna, curval);
 
-        /* Flush results & status codes to original data for UI (T59984) */
+        /* Flush results & status codes to original data for UI (#59984) */
         if (ok && DEG_is_active(depsgraph)) {
           animsys_write_orig_anim_rna(&id_ptr, fcu->rna_path, fcu->array_index, curval);
 

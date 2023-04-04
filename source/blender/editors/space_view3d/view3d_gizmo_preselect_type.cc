@@ -22,7 +22,7 @@
 #include "BKE_editmesh_cache.h"
 #include "BKE_global.h"
 #include "BKE_layer.h"
-#include "BKE_mesh.h"
+#include "BKE_mesh.hh"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_query.h"
@@ -46,13 +46,13 @@
 
 /**
  * Check if drawing should be performed, clear the pre-selection in the case it's disabled.
- * Without this, the gizmo would be visible while transforming. See T92954.
+ * Without this, the gizmo would be visible while transforming. See #92954.
  *
- * NOTE(@campbellbarton): This is a workaround for the gizmo system, since typically poll
+ * NOTE(@ideasman42): This is a workaround for the gizmo system, since typically poll
  * would be used for this purpose. The problem with using poll is once the gizmo is visible again
  * is there is a visible flicker showing the previous location before cursor motion causes the
  * pre selection to be updated. While this is only a glitch, it's distracting.
- * The gizmo system it's self could support this use case by tracking which gizmos draw and ensure
+ * The gizmo system itself could support this use case by tracking which gizmos draw and ensure
  * gizmos always run #wmGizmoType.test_select before drawing, however pre-selection is already
  * outside the scope of what gizmos are meant to be used for, so keep this workaround localized
  * to this gizmo type unless this seems worth supporting for more typical use-cases.

@@ -9,6 +9,8 @@
 
 #include "image_texture_info.hh"
 
+namespace blender::draw::image_engine {
+
 /** \brief Create GPUBatch for a IMAGE_ScreenSpaceTextureInfo. */
 class BatchUpdater {
   TextureInfo &info;
@@ -18,20 +20,13 @@ class BatchUpdater {
   int uv_id;
 
  public:
-  BatchUpdater(TextureInfo &info) : info(info)
-  {
-  }
+  BatchUpdater(TextureInfo &info) : info(info) {}
 
   void update_batch()
   {
     ensure_clear_batch();
     ensure_format();
     init_batch();
-  }
-
-  void discard_batch()
-  {
-    GPU_BATCH_DISCARD_SAFE(info.batch);
   }
 
  private:
@@ -89,3 +84,5 @@ class BatchUpdater {
     }
   }
 };
+
+}  // namespace blender::draw::image_engine

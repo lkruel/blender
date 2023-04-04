@@ -123,9 +123,7 @@ class Stack {
     size_ = 0;
   }
 
-  Stack(NoExceptConstructor, Allocator allocator = {}) noexcept : Stack(allocator)
-  {
-  }
+  Stack(NoExceptConstructor, Allocator allocator = {}) noexcept : Stack(allocator) {}
 
   /**
    * Create a new stack that contains the given elements. The values are pushed to the stack in
@@ -327,6 +325,15 @@ class Stack {
     this->destruct_all_elements();
     top_chunk_ = &inline_chunk_;
     top_ = top_chunk_->begin;
+  }
+
+  /**
+   * Removes all elements from the stack and frees any allocated memory.
+   */
+  void clear_and_shrink()
+  {
+    std::destroy_at(this);
+    new (this) Stack(NoExceptConstructor{});
   }
 
   /* This should only be called by unit tests. */

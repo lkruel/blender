@@ -92,7 +92,7 @@ template<
      * The equality operator used to compare keys. By default it will simply compare keys using the
      * `==` operator.
      */
-    typename IsEqual = DefaultEquality,
+    typename IsEqual = DefaultEquality<Key>,
     /**
      * This is what will actually be stored in the hash table array. At a minimum a slot has to be
      * able to hold a key, a value and information about whether the slot is empty, occupied or
@@ -171,9 +171,7 @@ class Map {
   {
   }
 
-  Map(NoExceptConstructor, Allocator allocator = {}) noexcept : Map(allocator)
-  {
-  }
+  Map(NoExceptConstructor, Allocator allocator = {}) noexcept : Map(allocator) {}
 
   ~Map() = default;
 
@@ -991,6 +989,15 @@ class Map {
   }
 
   /**
+   * Removes all key-value-pairs from the map and frees any allocated memory.
+   */
+  void clear_and_shrink()
+  {
+    std::destroy_at(this);
+    new (this) Map(NoExceptConstructor{});
+  }
+
+  /**
    * Get the number of collisions that the probing strategy has to go through to find the key or
    * determine that it is not in the map.
    */
@@ -1263,7 +1270,7 @@ template<typename Key,
                                                                        sizeof(Value)),
          typename ProbingStrategy = DefaultProbingStrategy,
          typename Hash = DefaultHash<Key>,
-         typename IsEqual = DefaultEquality,
+         typename IsEqual = DefaultEquality<Key>,
          typename Slot = typename DefaultMapSlot<Key, Value>::type>
 using RawMap =
     Map<Key, Value, InlineBufferCapacity, ProbingStrategy, Hash, IsEqual, Slot, RawAllocator>;
@@ -1332,9 +1339,7 @@ template<typename Key, typename Value> class StdUnorderedMapWrapper {
     map_.clear();
   }
 
-  void print_stats(StringRef /*name*/ = "") const
-  {
-  }
+  void print_stats(StringRef /*name*/ = "") const {}
 };
 
 }  // namespace blender

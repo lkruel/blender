@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright 2021 Blender Foundation. All rights reserved.
+# Copyright 2021 Blender Foundation
 
 set(INC
   .
@@ -16,6 +16,8 @@ set(INC
   ../../../../intern/guardedalloc
 )
 
+set(INC_SYS
+)
 
 set(SRC
   nodes/node_fn_align_euler_to_vector.cc
@@ -37,8 +39,10 @@ set(SRC
   nodes/node_fn_string_length.cc
   nodes/node_fn_value_to_string.cc
 
+  node_function_register.cc
   node_function_util.cc
 
+  node_function_register.hh
   node_function_util.hh
 )
 

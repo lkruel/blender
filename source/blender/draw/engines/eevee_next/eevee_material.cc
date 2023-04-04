@@ -193,11 +193,6 @@ MaterialPass MaterialModule::material_pass_get(Object *ob,
     inst_.sampling.reset();
   }
 
-  if ((pipeline_type == MAT_PIPE_DEFERRED) &&
-      GPU_material_flag_get(matpass.gpumat, GPU_MATFLAG_SHADER_TO_RGBA)) {
-    pipeline_type = MAT_PIPE_FORWARD;
-  }
-
   if (ELEM(pipeline_type,
            MAT_PIPE_FORWARD,
            MAT_PIPE_FORWARD_PREPASS,
@@ -239,10 +234,6 @@ Material &MaterialModule::material_sync(Object *ob,
                                                      MAT_PIPE_FORWARD_PREPASS) :
                                        (has_motion ? MAT_PIPE_DEFERRED_PREPASS_VELOCITY :
                                                      MAT_PIPE_DEFERRED_PREPASS);
-
-  /* TEST until we have deferred pipeline up and running. */
-  surface_pipe = MAT_PIPE_FORWARD;
-  prepass_pipe = has_motion ? MAT_PIPE_FORWARD_PREPASS_VELOCITY : MAT_PIPE_FORWARD_PREPASS;
 
   MaterialKey material_key(blender_mat, geometry_type, surface_pipe);
 
@@ -300,7 +291,9 @@ MaterialArray &MaterialModule::material_array_get(Object *ob, bool has_motion)
   for (auto i : IndexRange(materials_len)) {
     ::Material *blender_mat = material_from_slot(ob, i);
     Material &mat = material_sync(ob, blender_mat, to_material_geometry(ob), has_motion);
-    material_array_.materials.append(&mat);
+    /* \note: Perform a whole copy since next material_sync() can move the Material memory location
+     * (i.e: because of its container growing) */
+    material_array_.materials.append(mat);
     material_array_.gpu_materials.append(mat.shading.gpumat);
   }
   return material_array_;

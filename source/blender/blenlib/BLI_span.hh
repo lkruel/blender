@@ -66,6 +66,8 @@
 
 namespace blender {
 
+template<typename T> uint64_t get_default_hash(const T &v);
+
 /**
  * References an array of type T that is owned by someone else. The data in the array cannot be
  * modified.
@@ -116,13 +118,9 @@ template<typename T> class Span {
   {
   }
 
-  constexpr Span(const std::vector<T> &vector) : Span(vector.data(), int64_t(vector.size()))
-  {
-  }
+  constexpr Span(const std::vector<T> &vector) : Span(vector.data(), int64_t(vector.size())) {}
 
-  template<std::size_t N> constexpr Span(const std::array<T, N> &array) : Span(array.data(), N)
-  {
-  }
+  template<std::size_t N> constexpr Span(const std::array<T, N> &array) : Span(array.data(), N) {}
 
   /**
    * Support implicit conversions like the one below:
@@ -141,13 +139,30 @@ template<typename T> class Span {
   {
     BLI_assert(start >= 0);
     BLI_assert(size >= 0);
-    const int64_t new_size = std::max<int64_t>(0, std::min(size, size_ - start));
-    return Span(data_ + start, new_size);
+    BLI_assert(start + size <= size_ || size == 0);
+    return Span(data_ + start, size);
   }
 
   constexpr Span slice(IndexRange range) const
   {
     return this->slice(range.start(), range.size());
+  }
+
+  /**
+   * Returns a contiguous part of the array. This invokes undefined behavior when the start or size
+   * is negative. Clamps the size of the new span so it fits in the current one.
+   */
+  constexpr Span slice_safe(const int64_t start, const int64_t size) const
+  {
+    BLI_assert(start >= 0);
+    BLI_assert(size >= 0);
+    const int64_t new_size = std::max<int64_t>(0, std::min(size, size_ - start));
+    return Span(data_ + start, new_size);
+  }
+
+  constexpr Span slice_safe(IndexRange range) const
+  {
+    return this->slice_safe(range.start(), range.size());
   }
 
   /**
@@ -401,6 +416,15 @@ template<typename T> class Span {
     return IndexRange(size_);
   }
 
+  constexpr uint64_t hash() const
+  {
+    uint64_t hash = 0;
+    for (const T &value : *this) {
+      hash = hash * 33 ^ get_default_hash(value);
+    }
+    return hash;
+  }
+
   /**
    * Returns a new Span to the same underlying memory buffer. No conversions are done.
    */
@@ -469,13 +493,9 @@ template<typename T> class MutableSpan {
  public:
   constexpr MutableSpan() = default;
 
-  constexpr MutableSpan(T *start, const int64_t size) : data_(start), size_(size)
-  {
-  }
+  constexpr MutableSpan(T *start, const int64_t size) : data_(start), size_(size) {}
 
-  constexpr MutableSpan(std::vector<T> &vector) : MutableSpan(vector.data(), vector.size())
-  {
-  }
+  constexpr MutableSpan(std::vector<T> &vector) : MutableSpan(vector.data(), vector.size()) {}
 
   template<std::size_t N>
   constexpr MutableSpan(std::array<T, N> &array) : MutableSpan(array.data(), N)
@@ -580,13 +600,30 @@ template<typename T> class MutableSpan {
   {
     BLI_assert(start >= 0);
     BLI_assert(size >= 0);
-    const int64_t new_size = std::max<int64_t>(0, std::min(size, size_ - start));
-    return MutableSpan(data_ + start, new_size);
+    BLI_assert(start + size <= size_ || size == 0);
+    return MutableSpan(data_ + start, size);
   }
 
   constexpr MutableSpan slice(IndexRange range) const
   {
     return this->slice(range.start(), range.size());
+  }
+
+  /**
+   * Returns a contiguous part of the array. This invokes undefined behavior when the start or size
+   * is negative. Clamps the size of the new span so it fits in the current one.
+   */
+  constexpr MutableSpan slice_safe(const int64_t start, const int64_t size) const
+  {
+    BLI_assert(start >= 0);
+    BLI_assert(size >= 0);
+    const int64_t new_size = std::max<int64_t>(0, std::min(size, size_ - start));
+    return MutableSpan(data_ + start, new_size);
+  }
+
+  constexpr MutableSpan slice_safe(IndexRange range) const
+  {
+    return this->slice_safe(range.start(), range.size());
   }
 
   /**

@@ -602,7 +602,7 @@ void GHOST_SystemSDL::processEvent(SDL_Event *sdl_event)
       /* NOTE: the `sdl_sub_evt.keysym.sym` is truncated,
        * for unicode support ghost has to be modified. */
 
-      /* TODO(@campbellbarton): support full unicode, SDL supports this but it needs to be
+      /* TODO(@ideasman42): support full unicode, SDL supports this but it needs to be
        * explicitly enabled via #SDL_StartTextInput which GHOST would have to wrap. */
       char utf8_buf[sizeof(GHOST_TEventKeyData::utf8_buf)] = {'\0'};
       if (type == GHOST_kEventKeyDown) {
@@ -715,7 +715,7 @@ GHOST_WindowSDL *GHOST_SystemSDL::findGhostWindow(SDL_Window *sdl_win)
   if (sdl_win == nullptr) {
     return nullptr;
   }
-  /* It is not entirely safe to do this as the backptr may point
+  /* It is not entirely safe to do this as the back-pointer may point
    * to a window that has recently been removed.
    * We should always check the window manager's list of windows
    * and only process events on these windows. */
@@ -751,6 +751,15 @@ GHOST_TSuccess GHOST_SystemSDL::getButtons(GHOST_Buttons &buttons) const
   return GHOST_kSuccess;
 }
 
+GHOST_TCapabilityFlag GHOST_SystemSDL::getCapabilities() const
+{
+  return GHOST_TCapabilityFlag(
+      GHOST_CAPABILITY_FLAG_ALL &
+      ~(
+          /* This SDL back-end has not yet implemented primary clipboard. */
+          GHOST_kCapabilityPrimaryClipboard));
+}
+
 char *GHOST_SystemSDL::getClipboard(bool /*selection*/) const
 {
   return (char *)SDL_GetClipboardText();
@@ -761,7 +770,7 @@ void GHOST_SystemSDL::putClipboard(const char *buffer, bool /*selection*/) const
   SDL_SetClipboardText(buffer);
 }
 
-uint64_t GHOST_SystemSDL::getMilliSeconds()
+uint64_t GHOST_SystemSDL::getMilliSeconds() const
 {
   return uint64_t(SDL_GetTicks()); /* NOTE: 32 -> 64bits. */
 }

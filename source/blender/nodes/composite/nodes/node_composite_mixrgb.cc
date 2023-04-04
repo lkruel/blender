@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2006 Blender Foundation. All rights reserved. */
+ * Copyright 2006 Blender Foundation */
 
 /** \file
  * \ingroup cmpnodes
@@ -93,6 +93,8 @@ class MixRGBShaderNode : public ShaderNode {
         return "mix_div";
       case MA_RAMP_DIFF:
         return "mix_diff";
+      case MA_RAMP_EXCLUSION:
+        return "mix_exclusion";
       case MA_RAMP_DARK:
         return "mix_dark";
       case MA_RAMP_LIGHT:

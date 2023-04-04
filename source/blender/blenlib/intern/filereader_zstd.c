@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2021 Blender Foundation. All rights reserved. */
+ * Copyright 2021 Blender Foundation */
 
 /** \file
  * \ingroup bli
@@ -281,7 +281,7 @@ static void zstd_close(FileReader *reader)
   if (zstd->reader.seek) {
     MEM_freeN(zstd->seek.uncompressed_ofs);
     MEM_freeN(zstd->seek.compressed_ofs);
-    /* When an error has occurred this may be NULL, see: T99744. */
+    /* When an error has occurred this may be NULL, see: #99744. */
     if (zstd->seek.cached_content) {
       MEM_freeN(zstd->seek.cached_content);
     }

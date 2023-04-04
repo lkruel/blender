@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright 2018 Blender Foundation. All rights reserved.
+# Copyright 2018 Blender Foundation
 
 set(INC
   .
@@ -66,8 +66,7 @@ set(SRC
 
   # Lineart code
   intern/lineart/lineart_chain.c
-  intern/lineart/lineart_cpp_bridge.cc
-  intern/lineart/lineart_cpu.c
+  intern/lineart/lineart_cpu.cc
   intern/lineart/lineart_ops.c
   intern/lineart/lineart_shadow.c
   intern/lineart/lineart_util.c

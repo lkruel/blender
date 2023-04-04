@@ -393,7 +393,7 @@ TEST(set, IntrusiveIntKey)
       2,
       DefaultProbingStrategy,
       DefaultHash<int>,
-      DefaultEquality,
+      DefaultEquality<int>,
       IntegerSetSlot<int, 100, 200>>
       set;
   EXPECT_TRUE(set.add(4));
@@ -587,6 +587,39 @@ TEST(set, RemoveIf)
   for (const int64_t i : IndexRange(100)) {
     EXPECT_EQ(set.contains(i * i), i <= 10);
   }
+}
+
+TEST(set, RemoveUniquePtrWithRaw)
+{
+  Set<std::unique_ptr<int>> set;
+  std::unique_ptr<int> a = std::make_unique<int>(5);
+  int *a_ptr = a.get();
+  set.add(std::move(a));
+  EXPECT_EQ(set.size(), 1);
+  set.remove_as(a_ptr);
+  EXPECT_TRUE(set.is_empty());
+}
+
+TEST(set, Equality)
+{
+  const Set<int> a = {1, 2, 3, 4, 5};
+  const Set<int> b = {5, 2, 3, 1, 4};
+  const Set<int> c = {1, 2, 3};
+  const Set<int> d = {1, 2, 3, 4, 5, 6};
+  const Set<int> e = {};
+  const Set<int> f = {10, 11, 12, 13, 14};
+
+  EXPECT_EQ(a, a);
+  EXPECT_EQ(a, b);
+  EXPECT_EQ(b, a);
+  EXPECT_NE(a, c);
+  EXPECT_NE(a, d);
+  EXPECT_NE(a, e);
+  EXPECT_NE(a, f);
+  EXPECT_NE(c, a);
+  EXPECT_NE(d, a);
+  EXPECT_NE(e, a);
+  EXPECT_NE(f, a);
 }
 
 /**

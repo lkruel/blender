@@ -1,12 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2006 Blender Foundation. All rights reserved. */
+ * Copyright 2006 Blender Foundation */
 
 /** \file
  * \ingroup cmpnodes
  */
 
 #include "BLI_math_base.hh"
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -195,7 +195,7 @@ class BokehBlurOperation : public NodeOperation {
 
   int get_max_size()
   {
-    return static_cast<int>(bnode().custom4);
+    return int(bnode().custom4);
   }
 };
 

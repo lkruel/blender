@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2007 Blender Foundation. All rights reserved. */
+ * Copyright 2007 Blender Foundation */
 
 /** \file
  * \ingroup edsnd
@@ -500,7 +500,7 @@ static bool sound_mixdown_draw_check_prop(PointerRNA *UNUSED(ptr),
                                           void *UNUSED(user_data))
 {
   const char *prop_id = RNA_property_identifier(prop);
-  return !(STR_ELEM(prop_id, "filepath", "directory", "filename"));
+  return !STR_ELEM(prop_id, "filepath", "directory", "filename");
 }
 
 static void sound_mixdown_draw(bContext *C, wmOperator *op)

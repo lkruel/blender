@@ -64,9 +64,7 @@ CCL_NAMESPACE_BEGIN
   mapping_projection_enum.insert("sphere", TextureMapping::SPHERE); \
   SOCKET_ENUM(tex_mapping.projection, "Projection", mapping_projection_enum, TextureMapping::FLAT);
 
-TextureMapping::TextureMapping()
-{
-}
+TextureMapping::TextureMapping() {}
 
 Transform TextureMapping::compute_transform()
 {
@@ -226,6 +224,7 @@ NODE_DEFINE(ImageTextureNode)
   extension_enum.insert("periodic", EXTENSION_REPEAT);
   extension_enum.insert("clamp", EXTENSION_EXTEND);
   extension_enum.insert("black", EXTENSION_CLIP);
+  extension_enum.insert("mirror", EXTENSION_MIRROR);
   SOCKET_ENUM(extension, "Extension", extension_enum, EXTENSION_REPEAT);
 
   static NodeEnum projection_enum;
@@ -778,6 +777,68 @@ static void sky_texture_precompute_nishita(SunSky *sunsky,
   sunsky->nishita_data[9] = sun_intensity;
 }
 
+float SkyTextureNode::get_sun_average_radiance()
+{
+  float clamped_altitude = clamp(altitude, 1.0f, 59999.0f);
+  float angular_diameter = get_sun_size();
+
+  float pix_bottom[3];
+  float pix_top[3];
+  SKY_nishita_skymodel_precompute_sun(sun_elevation,
+                                      angular_diameter,
+                                      clamped_altitude,
+                                      air_density,
+                                      dust_density,
+                                      pix_bottom,
+                                      pix_top);
+
+  /* Approximate the direction's elevation as the sun's elevation. */
+  float dir_elevation = sun_elevation;
+  float half_angular = angular_diameter / 2.0f;
+  float3 pixel_bottom = make_float3(pix_bottom[0], pix_bottom[1], pix_bottom[2]);
+  float3 pixel_top = make_float3(pix_top[0], pix_top[1], pix_top[2]);
+
+  /* Same code as in the sun evaluation shader. */
+  float3 xyz = make_float3(0.0f, 0.0f, 0.0f);
+  float y = 0.0f;
+  if (sun_elevation - half_angular > 0.0f) {
+    if (sun_elevation + half_angular > 0.0f) {
+      y = ((dir_elevation - sun_elevation) / angular_diameter) + 0.5f;
+      xyz = interp(pixel_bottom, pixel_top, y) * sun_intensity;
+    }
+  }
+  else {
+    if (sun_elevation + half_angular > 0.0f) {
+      y = dir_elevation / (sun_elevation + half_angular);
+      xyz = interp(pixel_bottom, pixel_top, y) * sun_intensity;
+    }
+  }
+
+  /* We first approximate the sun's contribution by
+   * multiplying the evaluated point by the square of the angular diameter.
+   * Then we scale the approximation using a piecewise function (determined empirically). */
+  float sun_contribution = average(xyz) * sqr(angular_diameter);
+
+  float first_point = 0.8f / 180.0f * M_PI_F;
+  float second_point = 1.0f / 180.0f * M_PI_F;
+  float third_point = M_PI_2_F;
+  if (angular_diameter < first_point) {
+    sun_contribution *= 1.0f;
+  }
+  else if (angular_diameter < second_point) {
+    float diff = angular_diameter - first_point;
+    float slope = (0.8f - 1.0f) / (second_point - first_point);
+    sun_contribution *= 1.0f + slope * diff;
+  }
+  else {
+    float diff = angular_diameter - 1.0f / 180.0f * M_PI_F;
+    float slope = (0.45f - 0.8f) / (third_point - second_point);
+    sun_contribution *= 0.8f + slope * diff;
+  }
+
+  return sun_contribution;
+}
+
 NODE_DEFINE(SkyTextureNode)
 {
   NodeType *type = NodeType::add("sky_texture", create, NodeType::SHADER);
@@ -810,9 +871,7 @@ NODE_DEFINE(SkyTextureNode)
   return type;
 }
 
-SkyTextureNode::SkyTextureNode() : TextureNode(get_node_type())
-{
-}
+SkyTextureNode::SkyTextureNode() : TextureNode(get_node_type()) {}
 
 void SkyTextureNode::compile(SVMCompiler &compiler)
 {
@@ -992,9 +1051,7 @@ NODE_DEFINE(GradientTextureNode)
   return type;
 }
 
-GradientTextureNode::GradientTextureNode() : TextureNode(get_node_type())
-{
-}
+GradientTextureNode::GradientTextureNode() : TextureNode(get_node_type()) {}
 
 void GradientTextureNode::compile(SVMCompiler &compiler)
 {
@@ -1049,9 +1106,7 @@ NODE_DEFINE(NoiseTextureNode)
   return type;
 }
 
-NoiseTextureNode::NoiseTextureNode() : TextureNode(get_node_type())
-{
-}
+NoiseTextureNode::NoiseTextureNode() : TextureNode(get_node_type()) {}
 
 void NoiseTextureNode::compile(SVMCompiler &compiler)
 {
@@ -1142,9 +1197,7 @@ NODE_DEFINE(VoronoiTextureNode)
   return type;
 }
 
-VoronoiTextureNode::VoronoiTextureNode() : TextureNode(get_node_type())
-{
-}
+VoronoiTextureNode::VoronoiTextureNode() : TextureNode(get_node_type()) {}
 
 void VoronoiTextureNode::compile(SVMCompiler &compiler)
 {
@@ -1313,9 +1366,7 @@ NODE_DEFINE(WhiteNoiseTextureNode)
   return type;
 }
 
-WhiteNoiseTextureNode::WhiteNoiseTextureNode() : ShaderNode(get_node_type())
-{
-}
+WhiteNoiseTextureNode::WhiteNoiseTextureNode() : ShaderNode(get_node_type()) {}
 
 void WhiteNoiseTextureNode::compile(SVMCompiler &compiler)
 {
@@ -1378,9 +1429,7 @@ NODE_DEFINE(MusgraveTextureNode)
   return type;
 }
 
-MusgraveTextureNode::MusgraveTextureNode() : TextureNode(get_node_type())
-{
-}
+MusgraveTextureNode::MusgraveTextureNode() : TextureNode(get_node_type()) {}
 
 void MusgraveTextureNode::compile(SVMCompiler &compiler)
 {
@@ -1476,9 +1525,7 @@ NODE_DEFINE(WaveTextureNode)
   return type;
 }
 
-WaveTextureNode::WaveTextureNode() : TextureNode(get_node_type())
-{
-}
+WaveTextureNode::WaveTextureNode() : TextureNode(get_node_type()) {}
 
 void WaveTextureNode::compile(SVMCompiler &compiler)
 {
@@ -1553,9 +1600,7 @@ NODE_DEFINE(MagicTextureNode)
   return type;
 }
 
-MagicTextureNode::MagicTextureNode() : TextureNode(get_node_type())
-{
-}
+MagicTextureNode::MagicTextureNode() : TextureNode(get_node_type()) {}
 
 void MagicTextureNode::compile(SVMCompiler &compiler)
 {
@@ -1606,9 +1651,7 @@ NODE_DEFINE(CheckerTextureNode)
   return type;
 }
 
-CheckerTextureNode::CheckerTextureNode() : TextureNode(get_node_type())
-{
-}
+CheckerTextureNode::CheckerTextureNode() : TextureNode(get_node_type()) {}
 
 void CheckerTextureNode::compile(SVMCompiler &compiler)
 {
@@ -1672,9 +1715,7 @@ NODE_DEFINE(BrickTextureNode)
   return type;
 }
 
-BrickTextureNode::BrickTextureNode() : TextureNode(get_node_type())
-{
-}
+BrickTextureNode::BrickTextureNode() : TextureNode(get_node_type()) {}
 
 void BrickTextureNode::compile(SVMCompiler &compiler)
 {
@@ -1765,13 +1806,9 @@ NODE_DEFINE(PointDensityTextureNode)
   return type;
 }
 
-PointDensityTextureNode::PointDensityTextureNode() : ShaderNode(get_node_type())
-{
-}
+PointDensityTextureNode::PointDensityTextureNode() : ShaderNode(get_node_type()) {}
 
-PointDensityTextureNode::~PointDensityTextureNode()
-{
-}
+PointDensityTextureNode::~PointDensityTextureNode() {}
 
 ShaderNode *PointDensityTextureNode::clone(ShaderGraph *graph) const
 {
@@ -1882,9 +1919,7 @@ NODE_DEFINE(NormalNode)
   return type;
 }
 
-NormalNode::NormalNode() : ShaderNode(get_node_type())
-{
-}
+NormalNode::NormalNode() : ShaderNode(get_node_type()) {}
 
 void NormalNode::compile(SVMCompiler &compiler)
 {
@@ -1929,9 +1964,7 @@ NODE_DEFINE(MappingNode)
   return type;
 }
 
-MappingNode::MappingNode() : ShaderNode(get_node_type())
-{
-}
+MappingNode::MappingNode() : ShaderNode(get_node_type()) {}
 
 void MappingNode::constant_fold(const ConstantFolder &folder)
 {
@@ -1984,9 +2017,7 @@ NODE_DEFINE(RGBToBWNode)
   return type;
 }
 
-RGBToBWNode::RGBToBWNode() : ShaderNode(get_node_type())
-{
-}
+RGBToBWNode::RGBToBWNode() : ShaderNode(get_node_type()) {}
 
 void RGBToBWNode::constant_fold(const ConstantFolder &folder)
 {
@@ -2232,9 +2263,7 @@ bool BsdfBaseNode::has_bump()
 
 /* BSDF Closure */
 
-BsdfNode::BsdfNode(const NodeType *node_type) : BsdfBaseNode(node_type)
-{
-}
+BsdfNode::BsdfNode(const NodeType *node_type) : BsdfBaseNode(node_type) {}
 
 void BsdfNode::compile(SVMCompiler &compiler,
                        ShaderInput *param1,
@@ -2354,7 +2383,7 @@ NODE_DEFINE(GlossyBsdfNode)
   static NodeEnum distribution_enum;
   distribution_enum.insert("sharp", CLOSURE_BSDF_REFLECTION_ID);
   distribution_enum.insert("beckmann", CLOSURE_BSDF_MICROFACET_BECKMANN_ID);
-  distribution_enum.insert("GGX", CLOSURE_BSDF_MICROFACET_GGX_ID);
+  distribution_enum.insert("ggx", CLOSURE_BSDF_MICROFACET_GGX_ID);
   distribution_enum.insert("ashikhmin_shirley", CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ID);
   distribution_enum.insert("Multiscatter GGX", CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID);
   SOCKET_ENUM(distribution, "Distribution", distribution_enum, CLOSURE_BSDF_MICROFACET_GGX_ID);
@@ -2446,7 +2475,7 @@ NODE_DEFINE(GlassBsdfNode)
   static NodeEnum distribution_enum;
   distribution_enum.insert("sharp", CLOSURE_BSDF_SHARP_GLASS_ID);
   distribution_enum.insert("beckmann", CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID);
-  distribution_enum.insert("GGX", CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID);
+  distribution_enum.insert("ggx", CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID);
   distribution_enum.insert("Multiscatter GGX", CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
   SOCKET_ENUM(
       distribution, "Distribution", distribution_enum, CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID);
@@ -2539,7 +2568,7 @@ NODE_DEFINE(RefractionBsdfNode)
   static NodeEnum distribution_enum;
   distribution_enum.insert("sharp", CLOSURE_BSDF_REFRACTION_ID);
   distribution_enum.insert("beckmann", CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID);
-  distribution_enum.insert("GGX", CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID);
+  distribution_enum.insert("ggx", CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID);
   SOCKET_ENUM(
       distribution, "Distribution", distribution_enum, CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID);
 
@@ -3113,9 +3142,7 @@ NODE_DEFINE(EmissionNode)
   return type;
 }
 
-EmissionNode::EmissionNode() : ShaderNode(get_node_type())
-{
-}
+EmissionNode::EmissionNode() : ShaderNode(get_node_type()) {}
 
 void EmissionNode::compile(SVMCompiler &compiler)
 {
@@ -3162,9 +3189,7 @@ NODE_DEFINE(BackgroundNode)
   return type;
 }
 
-BackgroundNode::BackgroundNode() : ShaderNode(get_node_type())
-{
-}
+BackgroundNode::BackgroundNode() : ShaderNode(get_node_type()) {}
 
 void BackgroundNode::compile(SVMCompiler &compiler)
 {
@@ -3210,9 +3235,7 @@ NODE_DEFINE(HoldoutNode)
   return type;
 }
 
-HoldoutNode::HoldoutNode() : ShaderNode(get_node_type())
-{
-}
+HoldoutNode::HoldoutNode() : ShaderNode(get_node_type()) {}
 
 void HoldoutNode::compile(SVMCompiler &compiler)
 {
@@ -3248,9 +3271,7 @@ NODE_DEFINE(AmbientOcclusionNode)
   return type;
 }
 
-AmbientOcclusionNode::AmbientOcclusionNode() : ShaderNode(get_node_type())
-{
-}
+AmbientOcclusionNode::AmbientOcclusionNode() : ShaderNode(get_node_type()) {}
 
 void AmbientOcclusionNode::compile(SVMCompiler &compiler)
 {
@@ -3677,9 +3698,6 @@ NODE_DEFINE(GeometryNode)
 {
   NodeType *type = NodeType::add("geometry", create, NodeType::SHADER);
 
-  SOCKET_IN_NORMAL(
-      normal_osl, "NormalIn", zero_float3(), SocketType::LINK_NORMAL | SocketType::OSL_INTERNAL);
-
   SOCKET_OUT_POINT(position, "Position");
   SOCKET_OUT_NORMAL(normal, "Normal");
   SOCKET_OUT_NORMAL(tangent, "Tangent");
@@ -3812,9 +3830,6 @@ NODE_DEFINE(TextureCoordinateNode)
   SOCKET_BOOLEAN(use_transform, "Use Transform", false);
   SOCKET_TRANSFORM(ob_tfm, "Object Transform", transform_identity());
 
-  SOCKET_IN_NORMAL(
-      normal_osl, "NormalIn", zero_float3(), SocketType::LINK_NORMAL | SocketType::OSL_INTERNAL);
-
   SOCKET_OUT_POINT(generated, "Generated");
   SOCKET_OUT_NORMAL(normal, "Normal");
   SOCKET_OUT_POINT(UV, "UV");
@@ -3826,9 +3841,7 @@ NODE_DEFINE(TextureCoordinateNode)
   return type;
 }
 
-TextureCoordinateNode::TextureCoordinateNode() : ShaderNode(get_node_type())
-{
-}
+TextureCoordinateNode::TextureCoordinateNode() : ShaderNode(get_node_type()) {}
 
 void TextureCoordinateNode::attributes(Shader *shader, AttributeRequestSet *attributes)
 {
@@ -3973,9 +3986,7 @@ NODE_DEFINE(UVMapNode)
   return type;
 }
 
-UVMapNode::UVMapNode() : ShaderNode(get_node_type())
-{
-}
+UVMapNode::UVMapNode() : ShaderNode(get_node_type()) {}
 
 void UVMapNode::attributes(Shader *shader, AttributeRequestSet *attributes)
 {
@@ -4062,9 +4073,7 @@ NODE_DEFINE(LightPathNode)
   return type;
 }
 
-LightPathNode::LightPathNode() : ShaderNode(get_node_type())
-{
-}
+LightPathNode::LightPathNode() : ShaderNode(get_node_type()) {}
 
 void LightPathNode::compile(SVMCompiler &compiler)
 {
@@ -4162,9 +4171,7 @@ NODE_DEFINE(LightFalloffNode)
   return type;
 }
 
-LightFalloffNode::LightFalloffNode() : ShaderNode(get_node_type())
-{
-}
+LightFalloffNode::LightFalloffNode() : ShaderNode(get_node_type()) {}
 
 void LightFalloffNode::compile(SVMCompiler &compiler)
 {
@@ -4220,9 +4227,7 @@ NODE_DEFINE(ObjectInfoNode)
   return type;
 }
 
-ObjectInfoNode::ObjectInfoNode() : ShaderNode(get_node_type())
-{
-}
+ObjectInfoNode::ObjectInfoNode() : ShaderNode(get_node_type()) {}
 
 void ObjectInfoNode::compile(SVMCompiler &compiler)
 {
@@ -4283,9 +4288,7 @@ NODE_DEFINE(ParticleInfoNode)
   return type;
 }
 
-ParticleInfoNode::ParticleInfoNode() : ShaderNode(get_node_type())
-{
-}
+ParticleInfoNode::ParticleInfoNode() : ShaderNode(get_node_type()) {}
 
 void ParticleInfoNode::attributes(Shader *shader, AttributeRequestSet *attributes)
 {
@@ -4388,9 +4391,7 @@ NODE_DEFINE(HairInfoNode)
   return type;
 }
 
-HairInfoNode::HairInfoNode() : ShaderNode(get_node_type())
-{
-}
+HairInfoNode::HairInfoNode() : ShaderNode(get_node_type()) {}
 
 void HairInfoNode::attributes(Shader *shader, AttributeRequestSet *attributes)
 {
@@ -4466,9 +4467,7 @@ NODE_DEFINE(PointInfoNode)
   return type;
 }
 
-PointInfoNode::PointInfoNode() : ShaderNode(get_node_type())
-{
-}
+PointInfoNode::PointInfoNode() : ShaderNode(get_node_type()) {}
 
 void PointInfoNode::attributes(Shader *shader, AttributeRequestSet *attributes)
 {
@@ -4520,9 +4519,7 @@ NODE_DEFINE(VolumeInfoNode)
   return type;
 }
 
-VolumeInfoNode::VolumeInfoNode() : ShaderNode(get_node_type())
-{
-}
+VolumeInfoNode::VolumeInfoNode() : ShaderNode(get_node_type()) {}
 
 /* The requested attributes are not updated after node expansion.
  * So we explicitly request the required attributes.
@@ -4582,13 +4579,9 @@ void VolumeInfoNode::expand(ShaderGraph *graph)
   }
 }
 
-void VolumeInfoNode::compile(SVMCompiler &)
-{
-}
+void VolumeInfoNode::compile(SVMCompiler &) {}
 
-void VolumeInfoNode::compile(OSLCompiler &)
-{
-}
+void VolumeInfoNode::compile(OSLCompiler &) {}
 
 NODE_DEFINE(VertexColorNode)
 {
@@ -4601,9 +4594,7 @@ NODE_DEFINE(VertexColorNode)
   return type;
 }
 
-VertexColorNode::VertexColorNode() : ShaderNode(get_node_type())
-{
-}
+VertexColorNode::VertexColorNode() : ShaderNode(get_node_type()) {}
 
 void VertexColorNode::attributes(Shader *shader, AttributeRequestSet *attributes)
 {
@@ -4682,9 +4673,7 @@ NODE_DEFINE(ValueNode)
   return type;
 }
 
-ValueNode::ValueNode() : ShaderNode(get_node_type())
-{
-}
+ValueNode::ValueNode() : ShaderNode(get_node_type()) {}
 
 void ValueNode::constant_fold(const ConstantFolder &folder)
 {
@@ -4716,9 +4705,7 @@ NODE_DEFINE(ColorNode)
   return type;
 }
 
-ColorNode::ColorNode() : ShaderNode(get_node_type())
-{
-}
+ColorNode::ColorNode() : ShaderNode(get_node_type()) {}
 
 void ColorNode::constant_fold(const ConstantFolder &folder)
 {
@@ -4853,9 +4840,7 @@ NODE_DEFINE(MixClosureWeightNode)
   return type;
 }
 
-MixClosureWeightNode::MixClosureWeightNode() : ShaderNode(get_node_type())
-{
-}
+MixClosureWeightNode::MixClosureWeightNode() : ShaderNode(get_node_type()) {}
 
 void MixClosureWeightNode::compile(SVMCompiler &compiler)
 {
@@ -4890,9 +4875,7 @@ NODE_DEFINE(InvertNode)
   return type;
 }
 
-InvertNode::InvertNode() : ShaderNode(get_node_type())
-{
-}
+InvertNode::InvertNode() : ShaderNode(get_node_type()) {}
 
 void InvertNode::constant_fold(const ConstantFolder &folder)
 {
@@ -4953,6 +4936,7 @@ NODE_DEFINE(MixNode)
   type_enum.insert("color", NODE_MIX_COL);
   type_enum.insert("soft_light", NODE_MIX_SOFT);
   type_enum.insert("linear_light", NODE_MIX_LINEAR);
+  type_enum.insert("exclusion", NODE_MIX_EXCLUSION);
   SOCKET_ENUM(mix_type, "Type", type_enum, NODE_MIX_BLEND);
 
   SOCKET_BOOLEAN(use_clamp, "Use Clamp", false);
@@ -4966,9 +4950,7 @@ NODE_DEFINE(MixNode)
   return type;
 }
 
-MixNode::MixNode() : ShaderNode(get_node_type())
-{
-}
+MixNode::MixNode() : ShaderNode(get_node_type()) {}
 
 void MixNode::compile(SVMCompiler &compiler)
 {
@@ -5031,6 +5013,7 @@ NODE_DEFINE(MixColorNode)
   type_enum.insert("color", NODE_MIX_COL);
   type_enum.insert("soft_light", NODE_MIX_SOFT);
   type_enum.insert("linear_light", NODE_MIX_LINEAR);
+  type_enum.insert("exclusion", NODE_MIX_EXCLUSION);
   SOCKET_ENUM(blend_type, "Type", type_enum, NODE_MIX_BLEND);
 
   SOCKET_IN_FLOAT(fac, "Factor", 0.5f);
@@ -5044,9 +5027,7 @@ NODE_DEFINE(MixColorNode)
   return type;
 }
 
-MixColorNode::MixColorNode() : ShaderNode(get_node_type())
-{
-}
+MixColorNode::MixColorNode() : ShaderNode(get_node_type()) {}
 
 void MixColorNode::compile(SVMCompiler &compiler)
 {
@@ -5102,9 +5083,7 @@ NODE_DEFINE(MixFloatNode)
   return type;
 }
 
-MixFloatNode::MixFloatNode() : ShaderNode(get_node_type())
-{
-}
+MixFloatNode::MixFloatNode() : ShaderNode(get_node_type()) {}
 
 void MixFloatNode::compile(SVMCompiler &compiler)
 {
@@ -5138,6 +5117,9 @@ void MixFloatNode::constant_fold(const ConstantFolder &folder)
     }
     folder.make_constant(a * (1 - fac) + b * fac);
   }
+  else {
+    folder.fold_mix_float(use_clamp, false);
+  }
 }
 
 /* Mix Vector */
@@ -5156,9 +5138,7 @@ NODE_DEFINE(MixVectorNode)
   return type;
 }
 
-MixVectorNode::MixVectorNode() : ShaderNode(get_node_type())
-{
-}
+MixVectorNode::MixVectorNode() : ShaderNode(get_node_type()) {}
 
 void MixVectorNode::compile(SVMCompiler &compiler)
 {
@@ -5191,6 +5171,9 @@ void MixVectorNode::constant_fold(const ConstantFolder &folder)
     }
     folder.make_constant(a * (one_float3() - fac) + b * fac);
   }
+  else {
+    folder.fold_mix_color(NODE_MIX_BLEND, use_clamp, false);
+  }
 }
 
 /* Mix Vector Non Uniform */
@@ -5209,9 +5192,7 @@ NODE_DEFINE(MixVectorNonUniformNode)
   return type;
 }
 
-MixVectorNonUniformNode::MixVectorNonUniformNode() : ShaderNode(get_node_type())
-{
-}
+MixVectorNonUniformNode::MixVectorNonUniformNode() : ShaderNode(get_node_type()) {}
 
 void MixVectorNonUniformNode::compile(SVMCompiler &compiler)
 {
@@ -5267,9 +5248,7 @@ NODE_DEFINE(CombineColorNode)
   return type;
 }
 
-CombineColorNode::CombineColorNode() : ShaderNode(get_node_type())
-{
-}
+CombineColorNode::CombineColorNode() : ShaderNode(get_node_type()) {}
 
 void CombineColorNode::constant_fold(const ConstantFolder &folder)
 {
@@ -5318,9 +5297,7 @@ NODE_DEFINE(CombineRGBNode)
   return type;
 }
 
-CombineRGBNode::CombineRGBNode() : ShaderNode(get_node_type())
-{
-}
+CombineRGBNode::CombineRGBNode() : ShaderNode(get_node_type()) {}
 
 void CombineRGBNode::constant_fold(const ConstantFolder &folder)
 {
@@ -5366,9 +5343,7 @@ NODE_DEFINE(CombineXYZNode)
   return type;
 }
 
-CombineXYZNode::CombineXYZNode() : ShaderNode(get_node_type())
-{
-}
+CombineXYZNode::CombineXYZNode() : ShaderNode(get_node_type()) {}
 
 void CombineXYZNode::constant_fold(const ConstantFolder &folder)
 {
@@ -5414,9 +5389,7 @@ NODE_DEFINE(CombineHSVNode)
   return type;
 }
 
-CombineHSVNode::CombineHSVNode() : ShaderNode(get_node_type())
-{
-}
+CombineHSVNode::CombineHSVNode() : ShaderNode(get_node_type()) {}
 
 void CombineHSVNode::constant_fold(const ConstantFolder &folder)
 {
@@ -5457,9 +5430,7 @@ NODE_DEFINE(GammaNode)
   return type;
 }
 
-GammaNode::GammaNode() : ShaderNode(get_node_type())
-{
-}
+GammaNode::GammaNode() : ShaderNode(get_node_type()) {}
 
 void GammaNode::constant_fold(const ConstantFolder &folder)
 {
@@ -5513,9 +5484,7 @@ NODE_DEFINE(BrightContrastNode)
   return type;
 }
 
-BrightContrastNode::BrightContrastNode() : ShaderNode(get_node_type())
-{
-}
+BrightContrastNode::BrightContrastNode() : ShaderNode(get_node_type()) {}
 
 void BrightContrastNode::constant_fold(const ConstantFolder &folder)
 {
@@ -5564,9 +5533,7 @@ NODE_DEFINE(SeparateColorNode)
   return type;
 }
 
-SeparateColorNode::SeparateColorNode() : ShaderNode(get_node_type())
-{
-}
+SeparateColorNode::SeparateColorNode() : ShaderNode(get_node_type()) {}
 
 void SeparateColorNode::constant_fold(const ConstantFolder &folder)
 {
@@ -5622,9 +5589,7 @@ NODE_DEFINE(SeparateRGBNode)
   return type;
 }
 
-SeparateRGBNode::SeparateRGBNode() : ShaderNode(get_node_type())
-{
-}
+SeparateRGBNode::SeparateRGBNode() : ShaderNode(get_node_type()) {}
 
 void SeparateRGBNode::constant_fold(const ConstantFolder &folder)
 {
@@ -5675,9 +5640,7 @@ NODE_DEFINE(SeparateXYZNode)
   return type;
 }
 
-SeparateXYZNode::SeparateXYZNode() : ShaderNode(get_node_type())
-{
-}
+SeparateXYZNode::SeparateXYZNode() : ShaderNode(get_node_type()) {}
 
 void SeparateXYZNode::constant_fold(const ConstantFolder &folder)
 {
@@ -5728,9 +5691,7 @@ NODE_DEFINE(SeparateHSVNode)
   return type;
 }
 
-SeparateHSVNode::SeparateHSVNode() : ShaderNode(get_node_type())
-{
-}
+SeparateHSVNode::SeparateHSVNode() : ShaderNode(get_node_type()) {}
 
 void SeparateHSVNode::constant_fold(const ConstantFolder &folder)
 {
@@ -5782,9 +5743,7 @@ NODE_DEFINE(HSVNode)
   return type;
 }
 
-HSVNode::HSVNode() : ShaderNode(get_node_type())
-{
-}
+HSVNode::HSVNode() : ShaderNode(get_node_type()) {}
 
 void HSVNode::compile(SVMCompiler &compiler)
 {
@@ -5825,9 +5784,7 @@ NODE_DEFINE(AttributeNode)
   return type;
 }
 
-AttributeNode::AttributeNode() : ShaderNode(get_node_type())
-{
-}
+AttributeNode::AttributeNode() : ShaderNode(get_node_type()) {}
 
 void AttributeNode::attributes(Shader *shader, AttributeRequestSet *attributes)
 {
@@ -5913,9 +5870,7 @@ NODE_DEFINE(CameraNode)
   return type;
 }
 
-CameraNode::CameraNode() : ShaderNode(get_node_type())
-{
-}
+CameraNode::CameraNode() : ShaderNode(get_node_type()) {}
 
 void CameraNode::compile(SVMCompiler &compiler)
 {
@@ -5949,9 +5904,7 @@ NODE_DEFINE(FresnelNode)
   return type;
 }
 
-FresnelNode::FresnelNode() : ShaderNode(get_node_type())
-{
-}
+FresnelNode::FresnelNode() : ShaderNode(get_node_type()) {}
 
 void FresnelNode::compile(SVMCompiler &compiler)
 {
@@ -5987,9 +5940,7 @@ NODE_DEFINE(LayerWeightNode)
   return type;
 }
 
-LayerWeightNode::LayerWeightNode() : ShaderNode(get_node_type())
-{
-}
+LayerWeightNode::LayerWeightNode() : ShaderNode(get_node_type()) {}
 
 void LayerWeightNode::compile(SVMCompiler &compiler)
 {
@@ -6035,9 +5986,7 @@ NODE_DEFINE(WireframeNode)
   return type;
 }
 
-WireframeNode::WireframeNode() : ShaderNode(get_node_type())
-{
-}
+WireframeNode::WireframeNode() : ShaderNode(get_node_type()) {}
 
 void WireframeNode::compile(SVMCompiler &compiler)
 {
@@ -6083,9 +6032,7 @@ NODE_DEFINE(WavelengthNode)
   return type;
 }
 
-WavelengthNode::WavelengthNode() : ShaderNode(get_node_type())
-{
-}
+WavelengthNode::WavelengthNode() : ShaderNode(get_node_type()) {}
 
 void WavelengthNode::compile(SVMCompiler &compiler)
 {
@@ -6113,9 +6060,7 @@ NODE_DEFINE(BlackbodyNode)
   return type;
 }
 
-BlackbodyNode::BlackbodyNode() : ShaderNode(get_node_type())
-{
-}
+BlackbodyNode::BlackbodyNode() : ShaderNode(get_node_type()) {}
 
 void BlackbodyNode::constant_fold(const ConstantFolder &folder)
 {
@@ -6206,9 +6151,7 @@ NODE_DEFINE(MapRangeNode)
   return type;
 }
 
-MapRangeNode::MapRangeNode() : ShaderNode(get_node_type())
-{
-}
+MapRangeNode::MapRangeNode() : ShaderNode(get_node_type()) {}
 
 void MapRangeNode::expand(ShaderGraph *graph)
 {
@@ -6300,13 +6243,9 @@ NODE_DEFINE(VectorMapRangeNode)
   return type;
 }
 
-VectorMapRangeNode::VectorMapRangeNode() : ShaderNode(get_node_type())
-{
-}
+VectorMapRangeNode::VectorMapRangeNode() : ShaderNode(get_node_type()) {}
 
-void VectorMapRangeNode::expand(ShaderGraph * /*graph*/)
-{
-}
+void VectorMapRangeNode::expand(ShaderGraph * /*graph*/) {}
 
 void VectorMapRangeNode::compile(SVMCompiler &compiler)
 {
@@ -6361,9 +6300,7 @@ NODE_DEFINE(ClampNode)
   return type;
 }
 
-ClampNode::ClampNode() : ShaderNode(get_node_type())
-{
-}
+ClampNode::ClampNode() : ShaderNode(get_node_type()) {}
 
 void ClampNode::constant_fold(const ConstantFolder &folder)
 {
@@ -6514,9 +6451,7 @@ NODE_DEFINE(MathNode)
   return type;
 }
 
-MathNode::MathNode() : ShaderNode(get_node_type())
-{
-}
+MathNode::MathNode() : ShaderNode(get_node_type()) {}
 
 void MathNode::expand(ShaderGraph *graph)
 {
@@ -6621,9 +6556,7 @@ NODE_DEFINE(VectorMathNode)
   return type;
 }
 
-VectorMathNode::VectorMathNode() : ShaderNode(get_node_type())
-{
-}
+VectorMathNode::VectorMathNode() : ShaderNode(get_node_type()) {}
 
 void VectorMathNode::constant_fold(const ConstantFolder &folder)
 {
@@ -6711,9 +6644,7 @@ NODE_DEFINE(VectorRotateNode)
   return type;
 }
 
-VectorRotateNode::VectorRotateNode() : ShaderNode(get_node_type())
-{
-}
+VectorRotateNode::VectorRotateNode() : ShaderNode(get_node_type()) {}
 
 void VectorRotateNode::compile(SVMCompiler &compiler)
 {
@@ -6767,9 +6698,7 @@ NODE_DEFINE(VectorTransformNode)
   return type;
 }
 
-VectorTransformNode::VectorTransformNode() : ShaderNode(get_node_type())
-{
-}
+VectorTransformNode::VectorTransformNode() : ShaderNode(get_node_type()) {}
 
 void VectorTransformNode::compile(SVMCompiler &compiler)
 {
@@ -6871,9 +6800,7 @@ void BumpNode::constant_fold(const ConstantFolder &folder)
 
 /* Curves node */
 
-CurvesNode::CurvesNode(const NodeType *node_type) : ShaderNode(node_type)
-{
-}
+CurvesNode::CurvesNode(const NodeType *node_type) : ShaderNode(node_type) {}
 
 void CurvesNode::constant_fold(const ConstantFolder &folder, ShaderInput *value_in)
 {
@@ -6965,9 +6892,7 @@ NODE_DEFINE(RGBCurvesNode)
   return type;
 }
 
-RGBCurvesNode::RGBCurvesNode() : CurvesNode(get_node_type())
-{
-}
+RGBCurvesNode::RGBCurvesNode() : CurvesNode(get_node_type()) {}
 
 void RGBCurvesNode::constant_fold(const ConstantFolder &folder)
 {
@@ -7003,9 +6928,7 @@ NODE_DEFINE(VectorCurvesNode)
   return type;
 }
 
-VectorCurvesNode::VectorCurvesNode() : CurvesNode(get_node_type())
-{
-}
+VectorCurvesNode::VectorCurvesNode() : CurvesNode(get_node_type()) {}
 
 void VectorCurvesNode::constant_fold(const ConstantFolder &folder)
 {
@@ -7041,9 +6964,7 @@ NODE_DEFINE(FloatCurveNode)
   return type;
 }
 
-FloatCurveNode::FloatCurveNode() : ShaderNode(get_node_type())
-{
-}
+FloatCurveNode::FloatCurveNode() : ShaderNode(get_node_type()) {}
 
 void FloatCurveNode::constant_fold(const ConstantFolder &folder)
 {
@@ -7120,9 +7041,7 @@ NODE_DEFINE(RGBRampNode)
   return type;
 }
 
-RGBRampNode::RGBRampNode() : ShaderNode(get_node_type())
-{
-}
+RGBRampNode::RGBRampNode() : ShaderNode(get_node_type()) {}
 
 void RGBRampNode::constant_fold(const ConstantFolder &folder)
 {
@@ -7193,9 +7112,7 @@ NODE_DEFINE(SetNormalNode)
   return type;
 }
 
-SetNormalNode::SetNormalNode() : ShaderNode(get_node_type())
-{
-}
+SetNormalNode::SetNormalNode() : ShaderNode(get_node_type()) {}
 
 void SetNormalNode::compile(SVMCompiler &compiler)
 {
@@ -7217,6 +7134,7 @@ void SetNormalNode::compile(OSLCompiler &compiler)
 OSLNode::OSLNode() : ShaderNode(new NodeType(NodeType::SHADER))
 {
   special_type = SHADER_SPECIAL_TYPE_OSL;
+  has_emission = false;
 }
 
 OSLNode::~OSLNode()
@@ -7263,12 +7181,12 @@ char *OSLNode::input_default_value()
   return (char *)this + align_up(sizeof(OSLNode), 16) + inputs_size;
 }
 
-void OSLNode::add_input(ustring name, SocketType::Type socket_type)
+void OSLNode::add_input(ustring name, SocketType::Type socket_type, const int flags)
 {
   char *memory = input_default_value();
   size_t offset = memory - (char *)this;
   const_cast<NodeType *>(type)->register_input(
-      name, name, socket_type, offset, memory, NULL, NULL, SocketType::LINKABLE);
+      name, name, socket_type, offset, memory, NULL, NULL, flags | SocketType::LINKABLE);
 }
 
 void OSLNode::add_output(ustring name, SocketType::Type socket_type)
@@ -7305,8 +7223,6 @@ NODE_DEFINE(NormalMapNode)
 
   SOCKET_STRING(attribute, "Attribute", ustring());
 
-  SOCKET_IN_NORMAL(
-      normal_osl, "NormalIn", zero_float3(), SocketType::LINK_NORMAL | SocketType::OSL_INTERNAL);
   SOCKET_IN_FLOAT(strength, "Strength", 1.0f);
   SOCKET_IN_COLOR(color, "Color", make_float3(0.5f, 0.5f, 1.0f));
 
@@ -7315,9 +7231,7 @@ NODE_DEFINE(NormalMapNode)
   return type;
 }
 
-NormalMapNode::NormalMapNode() : ShaderNode(get_node_type())
-{
-}
+NormalMapNode::NormalMapNode() : ShaderNode(get_node_type()) {}
 
 void NormalMapNode::attributes(Shader *shader, AttributeRequestSet *attributes)
 {
@@ -7400,16 +7314,12 @@ NODE_DEFINE(TangentNode)
 
   SOCKET_STRING(attribute, "Attribute", ustring());
 
-  SOCKET_IN_NORMAL(
-      normal_osl, "NormalIn", zero_float3(), SocketType::LINK_NORMAL | SocketType::OSL_INTERNAL);
   SOCKET_OUT_NORMAL(tangent, "Tangent");
 
   return type;
 }
 
-TangentNode::TangentNode() : ShaderNode(get_node_type())
-{
-}
+TangentNode::TangentNode() : ShaderNode(get_node_type()) {}
 
 void TangentNode::attributes(Shader *shader, AttributeRequestSet *attributes)
 {
@@ -7477,9 +7387,7 @@ NODE_DEFINE(BevelNode)
   return type;
 }
 
-BevelNode::BevelNode() : ShaderNode(get_node_type())
-{
-}
+BevelNode::BevelNode() : ShaderNode(get_node_type()) {}
 
 void BevelNode::compile(SVMCompiler &compiler)
 {
@@ -7522,9 +7430,7 @@ NODE_DEFINE(DisplacementNode)
   return type;
 }
 
-DisplacementNode::DisplacementNode() : ShaderNode(get_node_type())
-{
-}
+DisplacementNode::DisplacementNode() : ShaderNode(get_node_type()) {}
 
 void DisplacementNode::constant_fold(const ConstantFolder &folder)
 {
@@ -7581,9 +7487,7 @@ NODE_DEFINE(VectorDisplacementNode)
   return type;
 }
 
-VectorDisplacementNode::VectorDisplacementNode() : ShaderNode(get_node_type())
-{
-}
+VectorDisplacementNode::VectorDisplacementNode() : ShaderNode(get_node_type()) {}
 
 void VectorDisplacementNode::constant_fold(const ConstantFolder &folder)
 {

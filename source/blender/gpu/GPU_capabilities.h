@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2005 Blender Foundation. All rights reserved. */
+ * Copyright 2005 Blender Foundation */
 
 /** \file
  * \ingroup gpu
@@ -46,6 +46,7 @@ bool GPU_use_hq_normals_workaround(void);
 bool GPU_clear_viewport_workaround(void);
 bool GPU_crappy_amd_driver(void);
 
+bool GPU_geometry_shader_support(void);
 bool GPU_compute_shader_support(void);
 bool GPU_shader_storage_buffer_objects_support(void);
 bool GPU_shader_image_load_store_support(void);

@@ -595,7 +595,7 @@ void Film::update_sample_table()
     }
     /* Put the closest one in first position. */
     if (closest_index != 0) {
-      SWAP(FilmSample, data_.samples[closest_index], data_.samples[0]);
+      std::swap(data_.samples[closest_index], data_.samples[0]);
     }
   }
   else {
@@ -649,7 +649,7 @@ void Film::accumulate(const DRWView *view, GPUTexture *combined_final_tx)
 
   draw::View drw_view("MainView", view);
 
-  DRW_manager_get()->submit(accumulate_ps_, drw_view);
+  inst_.manager->submit(accumulate_ps_, drw_view);
 
   combined_tx_.swap();
   weight_tx_.swap();

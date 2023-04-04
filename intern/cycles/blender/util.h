@@ -113,6 +113,7 @@ static inline BL::Mesh object_to_mesh(BL::BlendData & /*data*/,
 
   if ((bool)mesh && subdivision_type == Mesh::SUBDIVISION_NONE) {
     if (mesh.use_auto_smooth()) {
+      mesh.calc_normals_split();
       mesh.split_faces(false);
     }
 
@@ -701,9 +702,7 @@ static inline bool object_need_motion_attribute(BObjectInfo &b_ob_info, Scene *s
 
 class EdgeMap {
  public:
-  EdgeMap()
-  {
-  }
+  EdgeMap() {}
 
   void clear()
   {

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2005 Blender Foundation. All rights reserved. */
+ * Copyright 2005 Blender Foundation */
 
 #include "node_shader_util.hh"
 #include "sky_model.h"
@@ -281,7 +281,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
   const NodeDeclaration &declaration = *params.node_type().fixed_declaration;
   if (params.in_out() == SOCK_OUT) {
-    search_link_ops_for_declarations(params, declaration.outputs());
+    search_link_ops_for_declarations(params, declaration.outputs);
     return;
   }
   if (params.node_tree().typeinfo->validate_link(

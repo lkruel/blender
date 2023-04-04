@@ -281,6 +281,8 @@ inline T *MEM_new(const char *allocation_name, Args &&...args)
  */
 template<typename T> inline void MEM_delete(const T *ptr)
 {
+  static_assert(!std::is_void_v<T>,
+                "MEM_delete on a void pointer not possible. Cast it to a non-void type?");
   if (ptr == nullptr) {
     /* Support #ptr being null, because C++ `delete` supports that as well. */
     return;
@@ -360,9 +362,7 @@ template<typename T> inline T *MEM_cnew(const char *allocation_name, const T &ot
     } \
     /* This is the matching delete operator to the placement-new operator above. Both parameters \
      * will have the same value. Without this, we get the warning C4291 on windows. */ \
-    void operator delete(void * /*ptr_to_free*/, void * /*ptr*/) \
-    { \
-    }
+    void operator delete(void * /*ptr_to_free*/, void * /*ptr*/) {}
 
 #endif /* __cplusplus */
 

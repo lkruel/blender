@@ -26,22 +26,20 @@ class HdCyclesVolumeLoader : public VDBImageLoader {
   HdCyclesVolumeLoader(const std::string &filePath, const std::string &gridName)
       : VDBImageLoader(gridName)
   {
+    /* Disable delay loading and file copying, this has poor performance on network drivers. */
+    const bool delay_load = false;
     openvdb::io::File file(filePath);
     file.setCopyMaxBytes(0);
-    if (file.open()) {
+    if (file.open(delay_load)) {
       grid = file.readGrid(gridName);
     }
   }
 };
 #endif
 
-HdCyclesField::HdCyclesField(const SdfPath &bprimId, const TfToken &typeId) : HdField(bprimId)
-{
-}
+HdCyclesField::HdCyclesField(const SdfPath &bprimId, const TfToken &typeId) : HdField(bprimId) {}
 
-HdCyclesField::~HdCyclesField()
-{
-}
+HdCyclesField::~HdCyclesField() {}
 
 HdDirtyBits HdCyclesField::GetInitialDirtyBitsMask() const
 {

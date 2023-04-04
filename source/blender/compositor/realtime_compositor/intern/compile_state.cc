@@ -2,7 +2,7 @@
 
 #include <limits>
 
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
 
 #include "DNA_node_types.h"
 
@@ -21,9 +21,7 @@ namespace blender::realtime_compositor {
 
 using namespace nodes::derived_node_tree_types;
 
-CompileState::CompileState(const Schedule &schedule) : schedule_(schedule)
-{
-}
+CompileState::CompileState(const Schedule &schedule) : schedule_(schedule) {}
 
 const Schedule &CompileState::get_schedule()
 {

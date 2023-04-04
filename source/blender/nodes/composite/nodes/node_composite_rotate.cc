@@ -1,12 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2006 Blender Foundation. All rights reserved. */
+ * Copyright 2006 Blender Foundation */
 
 /** \file
  * \ingroup cmpnodes
  */
 
 #include "BLI_assert.h"
-#include "BLI_float3x3.hh"
+#include "BLI_math_matrix.hh"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -55,9 +55,9 @@ class RotateOperation : public NodeOperation {
     Result &result = get_result("Image");
     input.pass_through(result);
 
-    const float rotation = get_input("Degr").get_float_value_default(0.0f);
+    const math::AngleRadian rotation = get_input("Degr").get_float_value_default(0.0f);
 
-    const float3x3 transformation = float3x3::from_rotation(rotation);
+    const float3x3 transformation = math::from_rotation<float3x3>(rotation);
 
     result.transform(transformation);
     result.get_realization_options().interpolation = get_interpolation();

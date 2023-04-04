@@ -1,9 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2005 Blender Foundation. All rights reserved. */
+ * Copyright 2005 Blender Foundation */
 
 #include "node_shader_util.hh"
 
 #include "BKE_context.h"
+
+#include "DEG_depsgraph_query.h"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -29,7 +31,11 @@ static void node_shader_buts_tangent(uiLayout *layout, bContext *C, PointerRNA *
     PointerRNA obptr = CTX_data_pointer_get(C, "active_object");
 
     if (obptr.data && RNA_enum_get(&obptr, "type") == OB_MESH) {
-      PointerRNA dataptr = RNA_pointer_get(&obptr, "data");
+      PointerRNA eval_obptr;
+
+      Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+      DEG_get_evaluated_rna_pointer(depsgraph, &obptr, &eval_obptr);
+      PointerRNA dataptr = RNA_pointer_get(&eval_obptr, "data");
       uiItemPointerR(row, ptr, "uv_map", &dataptr, "uv_layers", "", ICON_NONE);
     }
     else {

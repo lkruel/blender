@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2019 Blender Foundation. All rights reserved. */
+ * Copyright 2019 Blender Foundation */
 
 /** \file
  * \ingroup wm
@@ -11,6 +11,12 @@
 #include "GHOST_Types.h"
 
 #include "GPU_context.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+struct bContext;
 
 /* *************** Message box *************** */
 /* `WM_ghost_show_message_box` is implemented in `wm_windows.c` it is
@@ -26,3 +32,9 @@ void WM_ghost_show_message_box(const char *title,
                                GHOST_DialogOptions dialog_options);
 
 GHOST_TDrawingContextType wm_ghost_drawing_context_type(const eGPUBackendType gpu_backend);
+
+void wm_test_opengl_deprecation_warning(struct bContext *C);
+
+#ifdef __cplusplus
+}
+#endif

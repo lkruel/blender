@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2013 Blender Foundation. All rights reserved. */
+ * Copyright 2013 Blender Foundation */
 
 /** \file
  * \ingroup depsgraph
@@ -146,6 +146,9 @@ struct Depsgraph {
    * This way we simplify operators, which don't need to worry about where
    * to read stuff from. */
   bool is_active;
+
+  /* Optimize out evaluation of operations which affect hidden objects or disabled modifiers. */
+  bool use_visibility_optimization;
 
   DepsgraphDebug debug;
 

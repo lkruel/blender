@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2008 Blender Foundation. All rights reserved. */
+ * Copyright 2008 Blender Foundation */
 
 /** \file
  * \ingroup spbuttons
@@ -10,6 +10,10 @@
 #include "BLI_bitmap.h"
 #include "DNA_listBase.h"
 #include "RNA_types.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct ARegionType;
 struct ID;
@@ -97,3 +101,7 @@ void BUTTONS_OT_file_browse(struct wmOperatorType *ot);
  */
 void BUTTONS_OT_directory_browse(struct wmOperatorType *ot);
 void BUTTONS_OT_context_menu(struct wmOperatorType *ot);
+
+#ifdef __cplusplus
+}
+#endif

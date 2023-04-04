@@ -652,17 +652,11 @@ static void build_gammatabs(void)
   }
 }
 
-static void init_gammacross(Sequence *UNUSED(seq))
-{
-}
+static void init_gammacross(Sequence *UNUSED(seq)) {}
 
-static void load_gammacross(Sequence *UNUSED(seq))
-{
-}
+static void load_gammacross(Sequence *UNUSED(seq)) {}
 
-static void free_gammacross(Sequence *UNUSED(seq), const bool UNUSED(do_id_user))
-{
-}
+static void free_gammacross(Sequence *UNUSED(seq), const bool UNUSED(do_id_user)) {}
 
 static void do_gammacross_effect_byte(
     float fac, int x, int y, uchar *rect1, uchar *rect2, uchar *out)
@@ -704,10 +698,13 @@ static void do_gammacross_effect_float(
 
   for (int i = 0; i < y; i++) {
     for (int j = 0; j < x; j++) {
-      *rt = gammaCorrect(mfac * invGammaCorrect(*rt1) + fac * invGammaCorrect(*rt2));
-      rt1++;
-      rt2++;
-      rt++;
+      rt[0] = gammaCorrect(mfac * invGammaCorrect(rt1[0]) + fac * invGammaCorrect(rt2[0]));
+      rt[1] = gammaCorrect(mfac * invGammaCorrect(rt1[1]) + fac * invGammaCorrect(rt2[1]));
+      rt[2] = gammaCorrect(mfac * invGammaCorrect(rt1[2]) + fac * invGammaCorrect(rt2[2]));
+      rt[3] = gammaCorrect(mfac * invGammaCorrect(rt1[3]) + fac * invGammaCorrect(rt2[3]));
+      rt1 += 4;
+      rt2 += 4;
+      rt += 4;
     }
   }
 }
@@ -3417,17 +3414,11 @@ static ImBuf *do_text_effect(const SeqRenderData *context,
 /** \name Sequence Effect Factory
  * \{ */
 
-static void init_noop(Sequence *UNUSED(seq))
-{
-}
+static void init_noop(Sequence *UNUSED(seq)) {}
 
-static void load_noop(Sequence *UNUSED(seq))
-{
-}
+static void load_noop(Sequence *UNUSED(seq)) {}
 
-static void free_noop(Sequence *UNUSED(seq), const bool UNUSED(do_id_user))
-{
-}
+static void free_noop(Sequence *UNUSED(seq), const bool UNUSED(do_id_user)) {}
 
 static int num_inputs_default(void)
 {

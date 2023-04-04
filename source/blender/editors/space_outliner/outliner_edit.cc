@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2004 Blender Foundation. All rights reserved. */
+ * Copyright 2004 Blender Foundation */
 
 /** \file
  * \ingroup spoutliner
@@ -1259,7 +1259,8 @@ static int outliner_open_back(TreeElement *te)
   return retval;
 }
 
-/* Return element representing the active base or bone in the outliner, or NULL if none exists */
+/* Return element representing the active base or bone in the outliner, or NULL if none exists
+ */
 static TreeElement *outliner_show_active_get_element(bContext *C,
                                                      SpaceOutliner *space_outliner,
                                                      const Scene *scene,

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2020 Blender Foundation. All rights reserved. */
+ * Copyright 2020 Blender Foundation */
 
 /** \file
  * \ingroup gpu
@@ -47,6 +47,7 @@ class GLShader : public Shader {
   void fragment_shader_from_glsl(MutableSpan<const char *> sources) override;
   void compute_shader_from_glsl(MutableSpan<const char *> sources) override;
   bool finalize(const shader::ShaderCreateInfo *info = nullptr) override;
+  void warm_cache(int /*limit*/) override{};
 
   std::string resources_declare(const shader::ShaderCreateInfo &info) const override;
   std::string vertex_interface_declare(const shader::ShaderCreateInfo &info) const override;

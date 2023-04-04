@@ -10,14 +10,14 @@
 #include "lineart_intern.h"
 
 #include "BKE_global.h"
-#include "BKE_gpencil_modifier.h"
+#include "BKE_gpencil_modifier_legacy.h"
 #include "BKE_lib_id.h"
 #include "BKE_material.h"
 #include "BKE_object.h"
 #include "BKE_scene.h"
 #include "DEG_depsgraph_query.h"
 #include "DNA_collection_types.h"
-#include "DNA_gpencil_types.h"
+#include "DNA_gpencil_legacy_types.h"
 #include "DNA_light_types.h"
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
@@ -96,8 +96,6 @@ static bool lineart_contour_viewed_from_dark_side(LineartData *ld, LineartEdge *
   return false;
 }
 
-/* Cuts the original edge based on the occlusion results under light-camera, if segment
- * is occluded in light-camera, then that segment on the original edge must be shaded. */
 void lineart_register_shadow_cuts(LineartData *ld, LineartEdge *e, LineartEdge *shadow_edge)
 {
   LISTBASE_FOREACH (LineartEdgeSegment *, es, &shadow_edge->segments) {
@@ -588,7 +586,7 @@ static void lineart_shadow_edge_cut(LineartData *ld,
     new_seg_2->ratio = end;
   }
 
-  double r_fb_co_1[4], r_fb_co_2[4], r_gloc_1[3], r_gloc_2[3];
+  double r_fb_co_1[4] = {0}, r_fb_co_2[4] = {0}, r_gloc_1[3] = {0}, r_gloc_2[3] = {0};
   double r_new_in_the_middle[4], r_new_in_the_middle_global[3], r_new_at;
   double *s1_fb_co_1, *s1_fb_co_2, *s1_gloc_1, *s1_gloc_2;
 
@@ -603,9 +601,15 @@ static void lineart_shadow_edge_cut(LineartData *ld,
   for (seg = cut_start_after; seg != cut_end_before; seg = nes) {
     nes = seg->next;
 
-    s1_fb_co_1 = seg->fbc2, s1_fb_co_2 = nes->fbc1;
-    s1_gloc_1 = seg->g2, s1_gloc_2 = nes->g1;
-    seg_1 = seg, seg_2 = nes;
+    s1_fb_co_1 = seg->fbc2;
+    s1_fb_co_2 = nes->fbc1;
+
+    s1_gloc_1 = seg->g2;
+    s1_gloc_2 = nes->g1;
+
+    seg_1 = seg;
+    seg_2 = nes;
+
     if (seg == cut_start_after) {
       lineart_shadow_segment_slice_get(seg->fbc2,
                                        nes->fbc1,
@@ -616,7 +620,9 @@ static void lineart_shadow_edge_cut(LineartData *ld,
                                        nes->ratio,
                                        m_fbc1,
                                        m_g1);
-      s1_fb_co_1 = m_fbc1, s1_gloc_1 = m_g1;
+      s1_fb_co_1 = m_fbc1;
+      s1_gloc_1 = m_g1;
+
       seg_1 = new_seg_1;
       if (cut_start_after != new_seg_1) {
         BLI_insertlinkafter(&e->shadow_segments, cut_start_after, new_seg_1);
@@ -634,7 +640,9 @@ static void lineart_shadow_edge_cut(LineartData *ld,
                                        nes->ratio,
                                        m_fbc2,
                                        m_g2);
-      s1_fb_co_2 = m_fbc2, s1_gloc_2 = m_g2;
+      s1_fb_co_2 = m_fbc2;
+      s1_gloc_2 = m_g2;
+
       seg_2 = new_seg_2;
       if (cut_end_before != new_seg_2) {
         BLI_insertlinkbefore(&e->shadow_segments, cut_end_before, new_seg_2);
@@ -821,13 +829,15 @@ static bool lineart_shadow_cast_onto_triangle(LineartData *ld,
       interp_v3_v3v3_db(t_gpos1, gpos1, gpos2, gat1);
       interp_v3_v3v3_db(t_fbc1, fbc1, fbc2, rat1);
       t_fbc1[3] = interpd(fbc2[3], fbc1[3], gat1);
-      at1 = 0, trimmed1 = true;
+      at1 = 0;
+      trimmed1 = true;
     }
     if (at2 > 1) {
       interp_v3_v3v3_db(t_gpos2, gpos1, gpos2, gat2);
       interp_v3_v3v3_db(t_fbc2, fbc1, fbc2, rat2);
       t_fbc2[3] = interpd(fbc2[3], fbc1[3], gat2);
-      at2 = 1, trimmed2 = true;
+      at2 = 1;
+      trimmed2 = true;
     }
   }
   if (trimmed1) {
@@ -1108,14 +1118,6 @@ static void lineart_shadow_register_enclosed_shapes(LineartData *ld, LineartData
   }
 }
 
-/* This call would internally duplicate #original_ld, override necessary configurations for shadow
- * computations. It will return:
- *
- * 1) Generated shadow edges in format of `LineartElementLinkNode` which can be directly loaded
- * into later main view camera occlusion stage.
- * 2) Shadow render buffer if 3rd stage reprojection is need for silhouette/lit/shaded region
- * selection. Otherwise the shadow render buffer is deleted before this function returns.
- */
 bool lineart_main_try_generate_shadow(Depsgraph *depsgraph,
                                       Scene *scene,
                                       LineartData *original_ld,
@@ -1214,7 +1216,7 @@ bool lineart_main_try_generate_shadow(Depsgraph *depsgraph,
         proj, -ld->w, ld->w, -ld->h, ld->h, ld->conf.near_clip, ld->conf.far_clip);
   }
   invert_m4_m4(inv, ld->conf.cam_obmat);
-  mul_m4db_m4db_m4fl_uniq(result, proj, inv);
+  mul_m4db_m4db_m4fl(result, proj, inv);
   copy_m4_m4_db(proj, result);
   copy_m4_m4_db(ld->conf.view_projection, proj);
   unit_m4_db(view);
@@ -1314,8 +1316,6 @@ static void lineart_shadow_finalize_shadow_edges_task(
   }
 }
 
-/* Shadow segments needs to be transformed to view-camera space, just like any other objects.
- */
 void lineart_main_transform_and_add_shadow(LineartData *ld,
                                            LineartElementLinkNode *veln,
                                            LineartElementLinkNode *eeln)
@@ -1346,9 +1346,6 @@ void lineart_main_transform_and_add_shadow(LineartData *ld,
   BLI_addtail(&ld->geom.line_buffer_pointers, eeln);
 }
 
-/* Does the 3rd stage reprojection, will not re-load objects because #shadow_ld is not deleted.
- * Only re-projects view camera edges and check visibility in light camera, then we can determine
- * whether an edge landed on a lit or shaded area. */
 void lineart_main_make_enclosed_shapes(LineartData *ld, LineartData *shadow_ld)
 {
   double t_start;

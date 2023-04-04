@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2009 Blender Foundation. All rights reserved. */
+ * Copyright 2009 Blender Foundation */
 
 /** \file
  * \ingroup edgpencil
@@ -367,6 +367,8 @@ bool gpencil_active_layer_poll(struct bContext *C);
  */
 bool gpencil_active_brush_poll(struct bContext *C);
 bool gpencil_brush_create_presets_poll(bContext *C);
+
+int ED_gpencil_new_layer_dialog(bContext *C, wmOperator *op);
 
 /* Copy/Paste Buffer --------------------------------- */
 /* gpencil_edit.c */

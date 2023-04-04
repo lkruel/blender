@@ -28,18 +28,17 @@ typedef union IDPropertyTemplate {
   double d;
   struct {
     const char *str;
+    /** String length (including the null byte): `strlen(str) + 1`. */
     int len;
+    /** #eIDPropertySubType */
     char subtype;
   } string;
   struct ID *id;
   struct {
     int len;
+    /** #eIDPropertyType */
     char type;
   } array;
-  struct {
-    int matvec_size;
-    const float *example;
-  } matrix_or_vector;
 } IDPropertyTemplate;
 
 /* ----------- Property Array Type ---------- */
@@ -186,17 +185,17 @@ struct IDProperty *IDP_CopyProperty_ex(const struct IDProperty *prop,
  * Copy content from source #IDProperty into destination one,
  * freeing destination property's content first.
  */
-void IDP_CopyPropertyContent(struct IDProperty *dst, struct IDProperty *src) ATTR_NONNULL();
+void IDP_CopyPropertyContent(struct IDProperty *dst, const struct IDProperty *src) ATTR_NONNULL();
 
 /**
  * \param is_strict: When false treat missing items as a match.
  */
-bool IDP_EqualsProperties_ex(struct IDProperty *prop1,
-                             struct IDProperty *prop2,
+bool IDP_EqualsProperties_ex(const struct IDProperty *prop1,
+                             const struct IDProperty *prop2,
                              bool is_strict) ATTR_WARN_UNUSED_RESULT;
 
-bool IDP_EqualsProperties(struct IDProperty *prop1,
-                          struct IDProperty *prop2) ATTR_WARN_UNUSED_RESULT;
+bool IDP_EqualsProperties(const struct IDProperty *prop1,
+                          const struct IDProperty *prop2) ATTR_WARN_UNUSED_RESULT;
 
 /**
  * Allocate a new ID.
@@ -243,6 +242,7 @@ void IDP_ClearProperty(struct IDProperty *prop);
 void IDP_Reset(struct IDProperty *prop, const struct IDProperty *reference);
 
 #define IDP_Int(prop) ((prop)->data.val)
+#define IDP_Bool(prop) ((prop)->data.val)
 #define IDP_Array(prop) ((prop)->data.pointer)
 /* C11 const correctness for casts */
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
@@ -334,6 +334,8 @@ typedef enum eIDPropertyUIDataType {
   IDP_UI_DATA_TYPE_STRING = 2,
   /** IDP_ID. */
   IDP_UI_DATA_TYPE_ID = 3,
+  /** IDP_BOOLEAN or IDP_ARRAY with subtype IDP_BOOLEAN. */
+  IDP_UI_DATA_TYPE_BOOLEAN = 4,
 } eIDPropertyUIDataType;
 
 bool IDP_ui_data_supported(const struct IDProperty *prop);

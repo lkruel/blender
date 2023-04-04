@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_mesh.h"
+#include "BKE_mesh.hh"
 
 #include "BLI_task.hh"
 
@@ -15,13 +15,8 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description(
           N_("The corner to retrieve data from. Defaults to the corner from the context"));
   b.add_output<decl::Int>(N_("Vertex Index"))
-      .dependent_field()
+      .field_source_reference_all()
       .description(N_("The vertex the corner is attached to"));
-}
-
-static int get_loop_vert(const MLoop &loop)
-{
-  return loop.v;
 }
 
 class CornerVertFieldInput final : public bke::MeshFieldInput {
@@ -38,7 +33,7 @@ class CornerVertFieldInput final : public bke::MeshFieldInput {
     if (domain != ATTR_DOMAIN_CORNER) {
       return {};
     }
-    return VArray<int>::ForDerivedSpan<MLoop, get_loop_vert>(mesh.loops());
+    return VArray<int>::ForSpan(mesh.corner_verts());
   }
 
   uint64_t hash() const final
@@ -52,6 +47,11 @@ class CornerVertFieldInput final : public bke::MeshFieldInput {
       return true;
     }
     return false;
+  }
+
+  std::optional<eAttrDomain> preferred_domain(const Mesh & /*mesh*/) const final
+  {
+    return ATTR_DOMAIN_CORNER;
   }
 };
 

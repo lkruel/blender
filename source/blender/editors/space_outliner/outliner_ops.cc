@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2008 Blender Foundation. All rights reserved. */
+ * Copyright 2008 Blender Foundation */
 
 /** \file
  * \ingroup spoutliner
@@ -16,7 +16,7 @@ namespace blender::ed::outliner {
 /** \name Registration
  * \{ */
 
-void outliner_operatortypes(void)
+void outliner_operatortypes()
 {
   WM_operatortype_append(OUTLINER_OT_highlight_update);
   WM_operatortype_append(OUTLINER_OT_item_activate);

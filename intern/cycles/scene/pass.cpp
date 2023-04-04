@@ -52,7 +52,6 @@ const NodeEnum *Pass::get_type_enum()
     pass_type_enum.insert("emission", PASS_EMISSION);
     pass_type_enum.insert("background", PASS_BACKGROUND);
     pass_type_enum.insert("ao", PASS_AO);
-    pass_type_enum.insert("shadow", PASS_SHADOW);
     pass_type_enum.insert("diffuse", PASS_DIFFUSE);
     pass_type_enum.insert("diffuse_direct", PASS_DIFFUSE_DIRECT);
     pass_type_enum.insert("diffuse_indirect", PASS_DIFFUSE_INDIRECT);
@@ -135,9 +134,7 @@ NODE_DEFINE(Pass)
   return type;
 }
 
-Pass::Pass() : Node(get_node_type()), is_auto_(false)
-{
-}
+Pass::Pass() : Node(get_node_type()), is_auto_(false) {}
 
 PassInfo Pass::get_info() const
 {
@@ -208,10 +205,6 @@ PassInfo Pass::get_info(const PassType type, const bool include_albedo, const bo
       break;
     case PASS_AO:
       pass_info.num_components = 3;
-      break;
-    case PASS_SHADOW:
-      pass_info.num_components = 3;
-      pass_info.use_exposure = false;
       break;
 
     case PASS_DIFFUSE_COLOR:

@@ -18,7 +18,6 @@ struct ID;
 struct ListBase;
 struct MDeformVert;
 struct MEdge;
-struct MLoop;
 struct MPoly;
 struct Object;
 struct bDeformGroup;
@@ -37,6 +36,11 @@ int BKE_object_defgroup_active_index_get(const struct Object *ob);
  */
 void BKE_object_defgroup_active_index_set(struct Object *ob, int new_index);
 
+/**
+ * Return the ID's vertex group names.
+ * Supports Mesh (ME), Lattice (LT), and GreasePencil (GD) IDs.
+ * \return ListBase of bDeformGroup pointers.
+ */
 const struct ListBase *BKE_id_defgroup_list_get(const struct ID *id);
 struct ListBase *BKE_id_defgroup_list_get_mutable(struct ID *id);
 int BKE_id_defgroup_name_index(const struct ID *id, const char *name);
@@ -54,7 +58,7 @@ struct bDeformGroup *BKE_object_defgroup_find_name(const struct Object *ob, cons
  *
  * \param use_default: How to handle cases where no symmetrical group is found.
  * - false: sets these indices to -1, indicating the group should be ignored.
- * - true: sets the index to its location in the array (making the group point to it's self).
+ * - true: sets the index to its location in the array (making the group point to itself).
  *   Enable this for symmetrical actions which apply weight operations on symmetrical vertices
  *   where the symmetrical group will be used (if found), otherwise the same group is used.
  *
@@ -86,7 +90,7 @@ struct MDeformWeight *BKE_defvert_find_index(const struct MDeformVert *dv, int d
 /**
  * Ensures that `dv` has a deform weight entry for the specified defweight group.
  *
- * \note this function is mirrored in editmesh_tools.c, for use for edit-vertices.
+ * \note this function is mirrored in editmesh_tools.cc, for use for edit-vertices.
  */
 struct MDeformWeight *BKE_defvert_ensure_index(struct MDeformVert *dv, int defgroup);
 /**
@@ -265,14 +269,14 @@ void BKE_defvert_extract_vgroup_to_edgeweights(const struct MDeformVert *dvert,
 void BKE_defvert_extract_vgroup_to_loopweights(const struct MDeformVert *dvert,
                                                int defgroup,
                                                int verts_num,
-                                               const struct MLoop *loops,
+                                               const int *corner_verts,
                                                int loops_num,
                                                bool invert_vgroup,
                                                float *r_weights);
 void BKE_defvert_extract_vgroup_to_polyweights(const struct MDeformVert *dvert,
                                                int defgroup,
                                                int verts_num,
-                                               const struct MLoop *loops,
+                                               const int *corner_verts,
                                                int loops_num,
                                                const struct MPoly *polys,
                                                int polys_num,

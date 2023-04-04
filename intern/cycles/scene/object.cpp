@@ -57,7 +57,8 @@ struct UpdateObjectTransformState {
   /* Flags which will be synchronized to Integrator. */
   bool have_motion;
   bool have_curves;
-  // bool have_points;
+  bool have_points;
+  bool have_volumes;
 
   /* ** Scheduling queue. ** */
   Scene *scene;
@@ -112,9 +113,7 @@ Object::Object() : Node(get_node_type())
   intersects_volume = false;
 }
 
-Object::~Object()
-{
-}
+Object::~Object() {}
 
 void Object::update_motion()
 {
@@ -216,6 +215,7 @@ void Object::tag_update(Scene *scene)
 
     if (is_shadow_catcher_is_modified()) {
       scene->tag_shadow_catcher_modified();
+      flag |= ObjectManager::VISIBILITY_MODIFIED;
     }
   }
 
@@ -230,7 +230,7 @@ void Object::tag_update(Scene *scene)
 
     foreach (Node *node, geometry->get_used_shaders()) {
       Shader *shader = static_cast<Shader *>(node);
-      if (shader->get_use_mis() && shader->has_surface_emission)
+      if (shader->emission_sampling != EMISSION_SAMPLING_NONE)
         scene->light_manager->tag_update(scene, LightManager::EMISSIVE_MESH_MODIFIED);
     }
   }
@@ -378,9 +378,7 @@ ObjectManager::ObjectManager()
   need_flags_update = true;
 }
 
-ObjectManager::~ObjectManager()
-{
-}
+ObjectManager::~ObjectManager() {}
 
 static float object_volume_density(const Transform &tfm, Geometry *geom)
 {
@@ -432,6 +430,10 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
 
   if (geom->get_use_motion_blur()) {
     state->have_motion = true;
+  }
+
+  if (transform_negative_scale(tfm)) {
+    flag |= SD_OBJECT_NEGATIVE_SCALE;
   }
 
   if (geom->geometry_type == Geometry::MESH || geom->geometry_type == Geometry::POINTCLOUD) {
@@ -545,6 +547,12 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
   if (geom->geometry_type == Geometry::HAIR) {
     state->have_curves = true;
   }
+  if (geom->geometry_type == Geometry::POINTCLOUD) {
+    state->have_points = true;
+  }
+  if (geom->geometry_type == Geometry::VOLUME) {
+    state->have_volumes = true;
+  }
 
   /* Light group. */
   auto it = scene->lightgroups.find(ob->lightgroup);
@@ -558,10 +566,12 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
 
 void ObjectManager::device_update_prim_offsets(Device *device, DeviceScene *dscene, Scene *scene)
 {
-  BVHLayoutMask layout_mask = device->get_bvh_layout_mask();
-  if (layout_mask != BVH_LAYOUT_METAL && layout_mask != BVH_LAYOUT_MULTI_METAL &&
-      layout_mask != BVH_LAYOUT_MULTI_METAL_EMBREE) {
-    return;
+  if (!scene->integrator->get_use_light_tree()) {
+    BVHLayoutMask layout_mask = device->get_bvh_layout_mask();
+    if (layout_mask != BVH_LAYOUT_METAL && layout_mask != BVH_LAYOUT_MULTI_METAL &&
+        layout_mask != BVH_LAYOUT_MULTI_METAL_EMBREE) {
+      return;
+    }
   }
 
   /* On MetalRT, primitive / curve segment offsets can't be baked at BVH build time. Intersection
@@ -591,6 +601,8 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene, 
   state.need_motion = scene->need_motion();
   state.have_motion = false;
   state.have_curves = false;
+  state.have_points = false;
+  state.have_volumes = false;
   state.scene = scene;
   state.queue_start_object = 0;
 
@@ -658,6 +670,8 @@ void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene, 
 
   dscene->data.bvh.have_motion = state.have_motion;
   dscene->data.bvh.have_curves = state.have_curves;
+  dscene->data.bvh.have_points = state.have_points;
+  dscene->data.bvh.have_volumes = state.have_volumes;
 
   dscene->objects.clear_modified();
   dscene->object_motion_pass.clear_modified();
@@ -957,8 +971,6 @@ void ObjectManager::apply_static_transforms(DeviceScene *dscene, Scene *scene, P
         }
 
         object_flag[i] |= SD_OBJECT_TRANSFORM_APPLIED;
-        if (geom->transform_negative_scaled)
-          object_flag[i] |= SD_OBJECT_NEGATIVE_SCALE_APPLIED;
       }
     }
 

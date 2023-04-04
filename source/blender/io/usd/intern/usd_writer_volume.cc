@@ -13,6 +13,7 @@
 
 #include "BLI_fileops.h"
 #include "BLI_index_range.hh"
+#include "BLI_math_base.h"
 #include "BLI_path_util.h"
 #include "BLI_string.h"
 
@@ -22,9 +23,7 @@
 
 namespace blender::io::usd {
 
-USDVolumeWriter::USDVolumeWriter(const USDExporterContext &ctx) : USDAbstractWriter(ctx)
-{
-}
+USDVolumeWriter::USDVolumeWriter(const USDExporterContext &ctx) : USDAbstractWriter(ctx) {}
 
 bool USDVolumeWriter::check_is_animated(const HierarchyContext &context) const
 {

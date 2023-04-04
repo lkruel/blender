@@ -76,6 +76,7 @@ VolumeGrid *BKE_volume_grid_get_for_write(struct Volume *volume, int grid_index)
 const VolumeGrid *BKE_volume_grid_active_get_for_read(const struct Volume *volume);
 /* Tries to find a grid with the given name. Make sure that the volume has been loaded. */
 const VolumeGrid *BKE_volume_grid_find_for_read(const struct Volume *volume, const char *name);
+VolumeGrid *BKE_volume_grid_find_for_write(struct Volume *volume, const char *name);
 
 /* Tries to set the name of the velocity field. If no such grid exists with the given base name,
  * this will try common post-fixes in order to detect velocity fields split into multiple grids.
@@ -114,7 +115,9 @@ int BKE_volume_grid_channels(const struct VolumeGrid *grid);
  * Transformation from index space to object space.
  */
 void BKE_volume_grid_transform_matrix(const struct VolumeGrid *grid, float mat[4][4]);
-void BKE_volume_grid_transform_matrix_set(struct VolumeGrid *volume_grid, const float mat[4][4]);
+void BKE_volume_grid_transform_matrix_set(const struct Volume *volume,
+                                          struct VolumeGrid *volume_grid,
+                                          const float mat[4][4]);
 
 /* Volume Editing
  *
@@ -159,8 +162,8 @@ bool BKE_volume_save(const struct Volume *volume,
  * file or copy shared grids to make them writeable. */
 
 #ifdef __cplusplus
-#  include "BLI_float4x4.hh"
-#  include "BLI_math_vec_types.hh"
+#  include "BLI_math_matrix_types.hh"
+#  include "BLI_math_vector_types.hh"
 #  include "BLI_string_ref.hh"
 
 bool BKE_volume_min_max(const Volume *volume, blender::float3 &r_min, blender::float3 &r_max);

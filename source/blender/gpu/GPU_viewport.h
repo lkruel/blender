@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2005 Blender Foundation. All rights reserved. */
+ * Copyright 2005 Blender Foundation */
 
 /** \file
  * \ingroup gpu
@@ -25,8 +25,6 @@ typedef struct GHash GHash;
 typedef struct GPUViewport GPUViewport;
 
 struct DRWData;
-struct DefaultFramebufferList;
-struct DefaultTextureList;
 struct GPUFrameBuffer;
 
 GPUViewport *GPU_viewport_create(void);

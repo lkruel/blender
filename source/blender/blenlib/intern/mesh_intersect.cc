@@ -21,9 +21,9 @@
 #  include "BLI_map.hh"
 #  include "BLI_math_boolean.hh"
 #  include "BLI_math_mpq.hh"
-#  include "BLI_math_vec_mpq_types.hh"
-#  include "BLI_math_vec_types.hh"
 #  include "BLI_math_vector.h"
+#  include "BLI_math_vector_mpq_types.hh"
+#  include "BLI_math_vector_types.hh"
 #  include "BLI_polyfill_2d.h"
 #  include "BLI_set.hh"
 #  include "BLI_sort.hh"
@@ -162,9 +162,7 @@ Face::Face(
 {
 }
 
-Face::Face(Span<const Vert *> verts, int id, int orig) : vert(verts), id(id), orig(orig)
-{
-}
+Face::Face(Span<const Vert *> verts, int id, int orig) : vert(verts), id(id), orig(orig) {}
 
 void Face::populate_plane(bool need_exact)
 {
@@ -305,9 +303,7 @@ class IMeshArena::IMeshArenaImpl : NonCopyable, NonMovable {
   struct VSetKey {
     Vert *vert;
 
-    VSetKey(Vert *p) : vert(p)
-    {
-    }
+    VSetKey(Vert *p) : vert(p) {}
 
     uint64_t hash() const
     {
@@ -998,18 +994,10 @@ struct ITT_value {
   enum ITT_value_kind kind = INONE;
 
   ITT_value() = default;
-  explicit ITT_value(ITT_value_kind k) : kind(k)
-  {
-  }
-  ITT_value(ITT_value_kind k, int tsrc) : t_source(tsrc), kind(k)
-  {
-  }
-  ITT_value(ITT_value_kind k, const mpq3 &p1) : p1(p1), kind(k)
-  {
-  }
-  ITT_value(ITT_value_kind k, const mpq3 &p1, const mpq3 &p2) : p1(p1), p2(p2), kind(k)
-  {
-  }
+  explicit ITT_value(ITT_value_kind k) : kind(k) {}
+  ITT_value(ITT_value_kind k, int tsrc) : t_source(tsrc), kind(k) {}
+  ITT_value(ITT_value_kind k, const mpq3 &p1) : p1(p1), kind(k) {}
+  ITT_value(ITT_value_kind k, const mpq3 &p1, const mpq3 &p2) : p1(p1), p2(p2), kind(k) {}
 };
 
 static std::ostream &operator<<(std::ostream &os, const ITT_value &itt);
@@ -1147,7 +1135,7 @@ static int filter_plane_side(const double3 &p,
  * This works because the ratio of the projections of ab and ac onto n is the same as
  * the ratio along the line ab of the intersection point to the whole of ab.
  * The ab, ac, and dotbuf arguments are used as a temporaries; declaring them
- * in the caller can avoid many allocs and frees of mpq3 and mpq_class structures.
+ * in the caller can avoid many allocations and frees of mpq3 and mpq_class structures.
  */
 static inline mpq3 tti_interp(
     const mpq3 &a, const mpq3 &b, const mpq3 &c, const mpq3 &n, mpq3 &ab, mpq3 &ac, mpq3 &dotbuf)
@@ -1167,7 +1155,7 @@ static inline mpq3 tti_interp(
  * order. This is the same as -oriented(a, b, c, a + ad), but uses fewer arithmetic operations.
  * TODO: change arguments to `const Vert *` and use floating filters.
  * The ba, ca, n, and dotbuf arguments are used as temporaries; declaring them
- * in the caller can avoid many allocs and frees of mpq3 and mpq_class structures.
+ * in the caller can avoid many allocations and frees of mpq3 and mpq_class structures.
  */
 static inline int tti_above(const mpq3 &a,
                             const mpq3 &b,
@@ -2030,7 +2018,8 @@ static Array<Face *> polyfill_triangulate_poly(Face *f, IMeshArena *arena)
     }
     return Array<Face *>{f0, f1};
   }
-  /* Project along negative face normal so (x,y) can be used in 2d. */ float axis_mat[3][3];
+  /* Project along negative face normal so (x,y) can be used in 2d. */
+  float axis_mat[3][3];
   float(*projverts)[2];
   uint(*tris)[3];
   const int totfilltri = flen - 2;

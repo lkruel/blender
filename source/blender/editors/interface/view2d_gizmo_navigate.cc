@@ -110,7 +110,6 @@ struct NavigateWidgetGroup {
   struct {
     rcti rect_visible;
   } state;
-  int region_size[2];
 };
 
 static bool WIDGETGROUP_navigate_poll(const bContext *C, wmGizmoGroupType * /*gzgt*/)
@@ -137,6 +136,13 @@ static bool WIDGETGROUP_navigate_poll(const bContext *C, wmGizmoGroupType * /*gz
       }
       break;
     }
+    case SPACE_CLIP: {
+      const SpaceClip *sc = static_cast<const SpaceClip *>(area->spacedata.first);
+      if (sc->gizmo_flag & (SCLIP_GIZMO_HIDE | SCLIP_GIZMO_HIDE_NAVIGATE)) {
+        return false;
+      }
+      break;
+    }
   }
   return true;
 }
@@ -144,9 +150,6 @@ static bool WIDGETGROUP_navigate_poll(const bContext *C, wmGizmoGroupType * /*gz
 static void WIDGETGROUP_navigate_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
 {
   NavigateWidgetGroup *navgroup = MEM_cnew<NavigateWidgetGroup>(__func__);
-
-  navgroup->region_size[0] = -1;
-  navgroup->region_size[1] = -1;
 
   const struct NavigateGizmoInfo *navigate_params = navigate_params_from_space_type(
       gzgroup->type->gzmap_params.spaceid);
@@ -218,7 +221,7 @@ static void WIDGETGROUP_navigate_draw_prepare(const bContext *C, wmGizmoGroup *g
   navgroup->state.rect_visible = *rect_visible;
 
   const float icon_size = GIZMO_SIZE;
-  const float icon_offset_mini = icon_size * GIZMO_MINI_OFFSET_FAC * UI_DPI_FAC;
+  const float icon_offset_mini = icon_size * GIZMO_MINI_OFFSET_FAC * UI_SCALE_FAC;
   const float co[2] = {
       roundf(rect_visible->xmax - (icon_offset_mini * 0.75f)),
       roundf(rect_visible->ymax - (icon_offset_mini * 0.75f)),

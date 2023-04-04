@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2020 Blender Foundation. All rights reserved. */
+ * Copyright 2020 Blender Foundation */
 
 /** \file
  * \ingroup pythonintern
@@ -85,7 +85,7 @@ PyObject *BPY_app_usd_struct(void)
   BlenderAppUSDType.tp_init = NULL;
   BlenderAppUSDType.tp_new = NULL;
   BlenderAppUSDType.tp_hash = (hashfunc)
-      _Py_HashPointer; /* without this we can't do set(sys.modules) T29635. */
+      _Py_HashPointer; /* without this we can't do set(sys.modules) #29635. */
 
   return ret;
 }

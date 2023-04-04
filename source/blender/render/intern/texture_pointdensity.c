@@ -155,7 +155,8 @@ static void pointdensity_cache_psys(
   ParticleSimulationData sim = {NULL};
   ParticleData *pa = NULL;
   float cfra = BKE_scene_ctime_get(scene);
-  int i /*, Childexists*/ /* UNUSED */;
+  int i;
+  // int childexists = 0; /* UNUSED */
   int total_particles;
   int data_used;
   float *data_vel, *data_life;
@@ -178,7 +179,7 @@ static void pointdensity_cache_psys(
   invert_m4_m4(ob->world_to_object, ob->object_to_world);
 
   total_particles = psys->totpart + psys->totchild;
-  psys->lattice_deform_data = psys_create_lattice_deform_data(&sim);
+  psys_sim_data_init(&sim);
 
   pd->point_tree = BLI_bvhtree_new(total_particles, 0.0, 4, 6);
   pd->totpoints = total_particles;
@@ -258,10 +259,7 @@ static void pointdensity_cache_psys(
 
   BLI_bvhtree_balance(pd->point_tree);
 
-  if (psys->lattice_deform_data) {
-    BKE_lattice_deform_data_destroy(psys->lattice_deform_data);
-    psys->lattice_deform_data = NULL;
-  }
+  psys_sim_data_free(&sim);
 }
 
 static void pointdensity_cache_vertex_color(PointDensity *pd,
@@ -269,7 +267,7 @@ static void pointdensity_cache_vertex_color(PointDensity *pd,
                                             Mesh *mesh,
                                             float *data_color)
 {
-  const MLoop *mloop = BKE_mesh_loops(mesh);
+  const int *corner_verts = BKE_mesh_corner_verts(mesh);
   const int totloop = mesh->totloop;
   char layername[MAX_CUSTOMDATA_LAYER_NAME];
   int i;
@@ -290,7 +288,7 @@ static void pointdensity_cache_vertex_color(PointDensity *pd,
   int *mcorners = MEM_callocN(sizeof(int) * pd->totpoints, "point density corner count");
 
   for (i = 0; i < totloop; i++) {
-    int v = mloop[i].v;
+    int v = corner_verts[i];
 
     if (mcorners[v] == 0) {
       rgb_uchar_to_float(&data_color[v * 3], &mcol[i].r);
@@ -356,7 +354,7 @@ static void pointdensity_cache_vertex_weight(PointDensity *pd,
 static void pointdensity_cache_vertex_normal(Mesh *mesh, float *data_color)
 {
   BLI_assert(data_color);
-  const float(*vert_normals)[3] = BKE_mesh_vertex_normals_ensure(mesh);
+  const float(*vert_normals)[3] = BKE_mesh_vert_normals_ensure(mesh);
   memcpy(data_color, vert_normals, sizeof(float[3]) * mesh->totvert);
 }
 
@@ -364,7 +362,6 @@ static void pointdensity_cache_object(PointDensity *pd, Object *ob)
 {
   float *data_color;
   int i;
-  const MVert *mvert = NULL, *mv;
   Mesh *mesh = ob->data;
 
 #if 0 /* UNUSED */
@@ -380,7 +377,7 @@ static void pointdensity_cache_object(PointDensity *pd, Object *ob)
   }
 #endif
 
-  mvert = BKE_mesh_verts(mesh); /* local object space */
+  const float(*positions)[3] = BKE_mesh_vert_positions(mesh); /* local object space */
   pd->totpoints = mesh->totvert;
   if (pd->totpoints == 0) {
     return;
@@ -390,10 +387,10 @@ static void pointdensity_cache_object(PointDensity *pd, Object *ob)
   alloc_point_data(pd);
   point_data_pointers(pd, NULL, NULL, &data_color);
 
-  for (i = 0, mv = mvert; i < pd->totpoints; i++, mv++) {
+  for (i = 0; i < pd->totpoints; i++) {
     float co[3];
 
-    copy_v3_v3(co, mv->co);
+    copy_v3_v3(co, positions[i]);
 
     switch (pd->ob_cache_space) {
       case TEX_PD_OBJECTSPACE:
@@ -780,7 +777,7 @@ static void particle_system_minmax(Depsgraph *depsgraph,
 
   invert_m4_m4(imat, object->object_to_world);
   total_particles = psys->totpart + psys->totchild;
-  psys->lattice_deform_data = psys_create_lattice_deform_data(&sim);
+  psys_sim_data_init(&sim);
 
   for (i = 0, pa = psys->particles; i < total_particles; i++, pa++) {
     float co_object[3], co_min[3], co_max[3];
@@ -796,10 +793,7 @@ static void particle_system_minmax(Depsgraph *depsgraph,
     minmax_v3v3_v3(min, max, co_max);
   }
 
-  if (psys->lattice_deform_data) {
-    BKE_lattice_deform_data_destroy(psys->lattice_deform_data);
-    psys->lattice_deform_data = NULL;
-  }
+  psys_sim_data_free(&sim);
 }
 
 void RE_point_density_cache(struct Depsgraph *depsgraph, PointDensity *pd)
@@ -950,6 +944,4 @@ void RE_point_density_free(struct PointDensity *pd)
   free_pointdensity(pd);
 }
 
-void RE_point_density_fix_linking(void)
-{
-}
+void RE_point_density_fix_linking(void) {}

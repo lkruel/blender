@@ -26,6 +26,11 @@
 #include <mutex>
 #include <string>
 
+#ifdef USE_EVENT_BACKGROUND_THREAD
+#  include <atomic>
+#  include <thread>
+#endif
+
 class GHOST_WindowWayland;
 
 bool ghost_wl_output_own(const struct wl_output *wl_output);
@@ -41,6 +46,26 @@ void ghost_wl_surface_tag_cursor_pointer(struct wl_surface *surface);
 
 bool ghost_wl_surface_own_cursor_tablet(const struct wl_surface *surface);
 void ghost_wl_surface_tag_cursor_tablet(struct wl_surface *surface);
+
+/* Scaling to: translates from WAYLAND into GHOST (viewport local) coordinates.
+ * Scaling from: performs the reverse translation.
+ *
+ * Scaling "to" is used to map WAYLAND location cursor coordinates to GHOST coordinates.
+ * Scaling "from" is used to clamp cursor coordinates in WAYLAND local coordinates. */
+
+struct GWL_WindowScaleParams;
+wl_fixed_t gwl_window_scale_wl_fixed_to(const GWL_WindowScaleParams &scale_params,
+                                        wl_fixed_t value);
+wl_fixed_t gwl_window_scale_wl_fixed_from(const GWL_WindowScaleParams &scale_params,
+                                          wl_fixed_t value);
+
+/* Avoid this where possible as scaling integers often incurs rounding errors.
+ * Scale #wl_fixed_t where possible.
+ *
+ * In general scale by large values where this is less likely to be a problem. */
+
+int gwl_window_scale_int_to(const GWL_WindowScaleParams &scale_params, int value);
+int gwl_window_scale_int_from(const GWL_WindowScaleParams &scale_params, int value);
 
 #ifdef WITH_GHOST_WAYLAND_DYNLOAD
 /**
@@ -137,33 +162,49 @@ class GHOST_SystemWayland : public GHOST_System {
                               const bool is_dialog,
                               const GHOST_IWindow *parentWindow) override;
 
-  GHOST_TSuccess setCursorShape(GHOST_TStandardCursor shape);
+  GHOST_TCapabilityFlag getCapabilities() const override;
 
-  GHOST_TSuccess hasCursorShape(GHOST_TStandardCursor cursorShape);
+  /* WAYLAND utility functions (share window/system logic). */
 
-  GHOST_TSuccess setCustomCursorShape(uint8_t *bitmap,
-                                      uint8_t *mask,
-                                      int sizex,
-                                      int sizey,
-                                      int hotX,
-                                      int hotY,
-                                      bool canInvertColor);
+  GHOST_TSuccess cursor_shape_set(GHOST_TStandardCursor shape);
 
-  GHOST_TSuccess getCursorBitmap(GHOST_CursorBitmapRef *bitmap);
+  GHOST_TSuccess cursor_shape_check(GHOST_TStandardCursor cursorShape);
 
-  GHOST_TSuccess setCursorVisibility(bool visible);
+  GHOST_TSuccess cursor_shape_custom_set(uint8_t *bitmap,
+                                         uint8_t *mask,
+                                         int sizex,
+                                         int sizey,
+                                         int hotX,
+                                         int hotY,
+                                         bool canInvertColor);
 
-  bool supportsCursorWarp() override;
-  bool supportsWindowPosition() override;
+  GHOST_TSuccess cursor_bitmap_get(GHOST_CursorBitmapRef *bitmap);
 
-  bool getCursorGrabUseSoftwareDisplay(const GHOST_TGrabCursorMode mode);
+  GHOST_TSuccess cursor_visibility_set(bool visible);
+
+  bool cursor_grab_use_software_display_get(const GHOST_TGrabCursorMode mode);
+
+#ifdef USE_EVENT_BACKGROUND_THREAD
+  /**
+   * Return a separate WAYLAND local timer manager to #GHOST_System::getTimerManager
+   * Manipulation & access must lock with #GHOST_WaylandSystem::server_mutex.
+   *
+   * See #GWL_Display::ghost_timer_manager doc-string for details on why this is needed.
+   */
+  GHOST_TimerManager *ghost_timer_manager();
+#endif
 
   /* WAYLAND direct-data access. */
 
   struct wl_display *wl_display();
   struct wl_compositor *wl_compositor();
   struct zwp_primary_selection_device_manager_v1 *wp_primary_selection_manager();
+  struct xdg_activation_v1 *xdg_activation_manager();
   struct zwp_pointer_gestures_v1 *wp_pointer_gestures();
+#ifdef WITH_GHOST_WAYLAND_FRACTIONAL_SCALE
+  struct wp_fractional_scale_manager_v1 *wp_fractional_scale_manager();
+  struct wp_viewporter *wp_viewporter();
+#endif
 
 #ifdef WITH_GHOST_WAYLAND_LIBDECOR
   libdecor *libdecor_context();
@@ -176,13 +217,40 @@ class GHOST_SystemWayland : public GHOST_System {
 
   struct wl_shm *wl_shm() const;
 
+  static const char *xdg_app_id();
+
   /* WAYLAND utility functions. */
+
+  /**
+   * Push an event, with support for calling from a thread.
+   * NOTE: only needed for `USE_EVENT_BACKGROUND_THREAD`.
+   */
+  GHOST_TSuccess pushEvent_maybe_pending(GHOST_IEvent *event);
 
   /** Set this seat to be active. */
   void seat_active_set(const struct GWL_Seat *seat);
 
-  /** Clear all references to this surface to prevent accessing NULL pointers. */
-  void window_surface_unref(const wl_surface *wl_surface);
+  struct wl_seat *wl_seat_active_get_with_input_serial(uint32_t &serial);
+
+  /**
+   * Clear all references to this output.
+   *
+   * \note The compositor should have already called the `wl_surface_listener.leave` callback,
+   * however some compositors may not (see #103586).
+   * So remove references to the output before it's destroyed to avoid crashing.
+   *
+   * \return true when any references were removed.
+   */
+  bool output_unref(struct wl_output *wl_output);
+
+  void output_scale_update(GWL_Output *output);
+
+  /**
+   * Clear all references to this surface to prevent accessing NULL pointers.
+   *
+   * \return true when any references were removed.
+   */
+  bool window_surface_unref(const wl_surface *wl_surface);
 
   bool window_cursor_grab_set(const GHOST_TGrabCursorMode mode,
                               const GHOST_TGrabCursorMode mode_current,
@@ -190,12 +258,40 @@ class GHOST_SystemWayland : public GHOST_System {
                               const GHOST_Rect *wrap_bounds,
                               GHOST_TAxisFlag wrap_axis,
                               wl_surface *wl_surface,
-                              int scale);
+                              const struct GWL_WindowScaleParams &scale_params);
 
 #ifdef WITH_GHOST_WAYLAND_LIBDECOR
   static bool use_libdecor_runtime();
 #endif
 
+#ifdef USE_EVENT_BACKGROUND_THREAD
+  /* NOTE: allocate mutex so `const` functions can lock the mutex. */
+
+  /** Lock to prevent #wl_display_dispatch / #wl_display_roundtrip / #wl_display_flush
+   * from running at the same time. */
+  std::mutex *server_mutex = nullptr;
+
+  /**
+   * Threads must lock this before manipulating #GWL_Display::ghost_timer_manager.
+   *
+   * \note Using a separate lock to `server_mutex` is necessary because the
+   * server lock is already held when calling `ghost_wl_display_event_pump`.
+   * If manipulating the timer used the `server_mutex`, event pump can indirectly
+   * handle key up/down events which would lock `server_mutex` causing a dead-lock.
+   */
+  std::mutex *timer_mutex = nullptr;
+
+  std::thread::id main_thread_id;
+
+  std::atomic<bool> has_pending_actions_for_window = false;
+#endif
+
  private:
+  /**
+   * Support freeing the internal data separately from the destructor
+   * so it can be called when WAYLAND isn't running (immediately before raising an exception).
+   */
+  void display_destroy_and_free_all();
+
   struct GWL_Display *display_;
 };

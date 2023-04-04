@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2014 Blender Foundation. All rights reserved. */
+ * Copyright 2014 Blender Foundation */
 
 /** \file
  * \ingroup GHOST
@@ -141,7 +141,7 @@ GHOST_TSuccess GHOST_ContextGLX::initializeDrawingContext()
   /* -------------------------------------------------------------------- */
 #else
   /* Important to initialize only GLXEW (_not_ GLEW),
-   * since this breaks w/ Mesa's `swrast`, see: T46431. */
+   * since this breaks w/ Mesa's `swrast`, see: #46431. */
   glxewInit();
 #endif /* USE_GLXEW_INIT_WORKAROUND */
 

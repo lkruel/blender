@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_mesh.h"
+#include "BKE_mesh.hh"
 #include "BKE_mesh_mapping.h"
 
 #include "BLI_task.hh"
@@ -16,18 +16,13 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description(
           N_("The corner to retrieve data from. Defaults to the corner from the context"));
   b.add_output<decl::Int>(N_("Next Edge Index"))
-      .dependent_field()
+      .field_source_reference_all()
       .description(
           N_("The edge after the corner in the face, in the direction of increasing indices"));
   b.add_output<decl::Int>(N_("Previous Edge Index"))
-      .dependent_field()
+      .field_source_reference_all()
       .description(
           N_("The edge before the corner in the face, in the direction of decreasing indices"));
-}
-
-static int get_loop_edge(const MLoop &loop)
-{
-  return loop.e;
 }
 
 class CornerNextEdgeFieldInput final : public bke::MeshFieldInput {
@@ -44,7 +39,7 @@ class CornerNextEdgeFieldInput final : public bke::MeshFieldInput {
     if (domain != ATTR_DOMAIN_CORNER) {
       return {};
     }
-    return VArray<int>::ForDerivedSpan<MLoop, get_loop_edge>(mesh.loops());
+    return VArray<int>::ForSpan(mesh.corner_edges());
   }
 
   uint64_t hash() const final
@@ -58,6 +53,11 @@ class CornerNextEdgeFieldInput final : public bke::MeshFieldInput {
       return true;
     }
     return false;
+  }
+
+  std::optional<eAttrDomain> preferred_domain(const Mesh & /*mesh*/) const final
+  {
+    return ATTR_DOMAIN_CORNER;
   }
 };
 
@@ -76,15 +76,13 @@ class CornerPreviousEdgeFieldInput final : public bke::MeshFieldInput {
       return {};
     }
     const Span<MPoly> polys = mesh.polys();
-    const Span<MLoop> loops = mesh.loops();
+    const Span<int> corner_edges = mesh.corner_edges();
     Array<int> loop_to_poly_map = bke::mesh_topology::build_loop_to_poly_map(polys, mesh.totloop);
     return VArray<int>::ForFunc(
         mesh.totloop,
-        [polys, loops, loop_to_poly_map = std::move(loop_to_poly_map)](const int corner_i) {
-          const int poly_i = loop_to_poly_map[corner_i];
-          const MPoly &poly = polys[poly_i];
-          const int corner_i_prev = bke::mesh_topology::previous_poly_loop(poly, corner_i);
-          return loops[corner_i_prev].e;
+        [polys, corner_edges, loop_to_poly_map = std::move(loop_to_poly_map)](const int corner_i) {
+          const MPoly &poly = polys[loop_to_poly_map[corner_i]];
+          return corner_edges[bke::mesh::poly_corner_prev(poly, corner_i)];
         });
   }
 
@@ -99,6 +97,11 @@ class CornerPreviousEdgeFieldInput final : public bke::MeshFieldInput {
       return true;
     }
     return false;
+  }
+
+  std::optional<eAttrDomain> preferred_domain(const Mesh & /*mesh*/) const final
+  {
+    return ATTR_DOMAIN_CORNER;
   }
 };
 

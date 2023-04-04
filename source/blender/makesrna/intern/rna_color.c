@@ -332,7 +332,7 @@ static void rna_ColorRamp_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *
         WM_main_add_notifier(NC_LINESTYLE, linestyle);
         break;
       }
-      /* ColorRamp for particle display is owned by the object (see T54422) */
+      /* Color Ramp for particle display is owned by the object (see #54422) */
       case ID_OB:
       case ID_PA: {
         ParticleSettings *part = (ParticleSettings *)ptr->owner_id;
@@ -626,6 +626,7 @@ static void rna_ColorManagedColorspaceSettings_reload_update(Main *bmain,
     Image *ima = (Image *)id;
 
     DEG_id_tag_update(&ima->id, 0);
+    DEG_id_tag_update(&ima->id, ID_RECALC_SOURCE);
 
     BKE_image_signal(bmain, ima, NULL, IMA_SIGNAL_COLORMANAGE);
 
@@ -727,7 +728,7 @@ static void rna_def_curvemappoint(BlenderRNA *brna)
   PropertyRNA *prop;
   static const EnumPropertyItem prop_handle_type_items[] = {
       {0, "AUTO", 0, "Auto Handle", ""},
-      {CUMA_HANDLE_AUTO_ANIM, "AUTO_CLAMPED", 0, "Auto Clamped Handle", ""},
+      {CUMA_HANDLE_AUTO_ANIM, "AUTO_CLAMPED", 0, "Auto-Clamped Handle", ""},
       {CUMA_HANDLE_VECTOR, "VECTOR", 0, "Vector Handle", ""},
       {0, NULL, 0, NULL, NULL},
   };
@@ -978,7 +979,7 @@ static void rna_def_color_ramp_element_api(BlenderRNA *brna, PropertyRNA *cprop)
 
   /* TODO: make these functions generic in `texture.c`. */
   func = RNA_def_function(srna, "new", "rna_ColorRampElement_new");
-  RNA_def_function_ui_description(func, "Add element to ColorRamp");
+  RNA_def_function_ui_description(func, "Add element to Color Ramp");
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
   parm = RNA_def_float(
       func, "position", 0.0f, 0.0f, 1.0f, "Position", "Position to add element", 0.0f, 1.0f);
@@ -988,7 +989,7 @@ static void rna_def_color_ramp_element_api(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_ColorRampElement_remove");
-  RNA_def_function_ui_description(func, "Delete element from ColorRamp");
+  RNA_def_function_ui_description(func, "Delete element from Color Ramp");
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
   parm = RNA_def_pointer(func, "element", "ColorRampElement", "", "Element to remove");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
@@ -1068,14 +1069,14 @@ static void rna_def_color_ramp(BlenderRNA *brna)
 #  endif
 
   func = RNA_def_function(srna, "evaluate", "rna_ColorRamp_eval");
-  RNA_def_function_ui_description(func, "Evaluate ColorRamp");
+  RNA_def_function_ui_description(func, "Evaluate Color Ramp");
   parm = RNA_def_float(func,
                        "position",
                        1.0f,
                        0.0f,
                        1.0f,
                        "Position",
-                       "Evaluate ColorRamp at position",
+                       "Evaluate Color Ramp at position",
                        0.0f,
                        1.0f);
   RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);

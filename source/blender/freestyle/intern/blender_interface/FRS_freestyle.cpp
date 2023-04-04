@@ -72,12 +72,11 @@ static void load_post_callback(struct Main * /*main*/,
 }
 
 static bCallbackFuncStore load_post_callback_funcstore = {
-    nullptr,            /* next */
-    nullptr,            /* prev */
-    load_post_callback, /* func */
-    nullptr,            /* arg */
-    0                   /* alloc */
-};
+    /*next*/ nullptr,
+    /*prev*/ nullptr,
+    /*func*/ load_post_callback,
+    /*arg*/ nullptr,
+    /*alloc*/ 0};
 
 //=======================================================
 //   Initialization
@@ -596,9 +595,7 @@ void FRS_init_stroke_renderer(Render *re)
   controller->ResetRenderCount();
 }
 
-void FRS_begin_stroke_rendering(Render * /*re*/)
-{
-}
+void FRS_begin_stroke_rendering(Render * /*re*/) {}
 
 void FRS_do_stroke_rendering(Render *re, ViewLayer *view_layer)
 {

@@ -226,11 +226,11 @@ void DRW_instance_buffer_finish(DRWInstanceDataList *idatalist)
       GPU_batch_copy(batch, geom);
       if (inst_batch != NULL) {
         for (int i = 0; i < GPU_BATCH_INST_VBO_MAX_LEN && inst_batch->verts[i]; i++) {
-          GPU_batch_instbuf_add_ex(batch, inst_batch->verts[i], false);
+          GPU_batch_instbuf_add(batch, inst_batch->verts[i], false);
         }
       }
       else {
-        GPU_batch_instbuf_add_ex(batch, inst_buf, false);
+        GPU_batch_instbuf_add(batch, inst_buf, false);
       }
       /* Add reference to avoid comparing pointers (in DRW_temp_batch_request) that could
        * potentially be the same. This will delay the freeing of the GPUVertBuf itself. */
@@ -622,7 +622,7 @@ void drw_uniform_attrs_pool_update(GHash *table,
   }
 }
 
-GPUUniformBuf *drw_ensure_layer_attribute_buffer()
+GPUUniformBuf *drw_ensure_layer_attribute_buffer(void)
 {
   DRWData *data = DST.vmempool;
 
@@ -685,7 +685,7 @@ DRWSparseUniformBuf *DRW_uniform_attrs_pool_find_ubo(GHash *table,
   return buffer ? &buffer->ubos : NULL;
 }
 
-GHash *DRW_uniform_attrs_pool_new()
+GHash *DRW_uniform_attrs_pool_new(void)
 {
   return GPU_uniform_attr_list_hash_new("obattr_hash");
 }

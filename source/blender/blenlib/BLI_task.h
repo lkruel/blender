@@ -64,6 +64,8 @@ typedef void (*TaskFreeFunction)(TaskPool *__restrict pool, void *taskdata);
 /**
  * Regular task pool that immediately starts executing tasks as soon as they
  * are pushed, either on the current or another thread.
+ *
+ * Tasks will be executed as soon as they are added.
  */
 TaskPool *BLI_task_pool_create(void *userdata, eTaskPriority priority);
 
@@ -74,8 +76,10 @@ TaskPool *BLI_task_pool_create(void *userdata, eTaskPriority priority);
 TaskPool *BLI_task_pool_create_background(void *userdata, eTaskPriority priority);
 
 /**
- * Background Serial: run tasks one after the other in the background,
- * without parallelization between the tasks.
+ * Background Serial: run tasks one after the other in the background.
+ *
+ * Executes one task after the other, possibly on different threads
+ * but never in parallel.
  */
 TaskPool *BLI_task_pool_create_background_serial(void *userdata, eTaskPriority priority);
 
@@ -87,7 +91,7 @@ TaskPool *BLI_task_pool_create_background_serial(void *userdata, eTaskPriority p
 TaskPool *BLI_task_pool_create_suspended(void *userdata, eTaskPriority priority);
 
 /**
- * No threads: immediately executes tasks on the same thread. For debugging.
+ * No threads: immediately executes tasks on the same thread. For debugging purposes.
  */
 TaskPool *BLI_task_pool_create_no_threads(void *userdata);
 
@@ -426,7 +430,7 @@ void BLI_task_graph_edge_create(struct TaskNode *from_node, struct TaskNode *to_
  * cannot run the tasks itself. On a single thread, that causes a deadlock already. When there are
  * multiple threads, another thread will typically run the task and avoid the deadlock. However, if
  * this situation happens on all threads at the same time, all threads will deadlock. This happened
- * in T88598.
+ * in #88598.
  * \{ */
 
 void BLI_task_isolate(void (*func)(void *userdata), void *userdata);

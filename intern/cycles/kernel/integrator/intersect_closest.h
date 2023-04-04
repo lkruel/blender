@@ -11,9 +11,9 @@
 #include "kernel/integrator/path_state.h"
 #include "kernel/integrator/shadow_catcher.h"
 
-#include "kernel/light/light.h"
-
 #include "kernel/geom/geom.h"
+
+#include "kernel/light/light.h"
 
 #include "kernel/bvh/bvh.h"
 
@@ -150,7 +150,7 @@ ccl_device_forceinline void integrator_intersect_next_kernel_after_shadow_catche
   /* Continue with shading shadow catcher surface. Same as integrator_split_shadow_catcher, but
    * using NEXT instead of INIT. */
   Intersection isect ccl_optional_struct_init;
-  integrator_state_read_isect(kg, state, &isect);
+  integrator_state_read_isect(state, &isect);
 
   const int shader = intersection_get_shader(kg, &isect);
   const int flags = kernel_data_fetch(shaders, shader).flags;
@@ -326,7 +326,7 @@ ccl_device void integrator_intersect_closest(KernelGlobals kg,
 
   /* Read ray from integrator state into local memory. */
   Ray ray ccl_optional_struct_init;
-  integrator_state_read_ray(kg, state, &ray);
+  integrator_state_read_ray(state, &ray);
   kernel_assert(ray.tmax != 0.0f);
 
   const uint visibility = path_state_ray_visibility(state);
@@ -387,7 +387,7 @@ ccl_device void integrator_intersect_closest(KernelGlobals kg,
 #endif /* __MNEE__ */
 
   /* Light intersection for MIS. */
-  if (kernel_data.integrator.use_lamp_mis) {
+  if (kernel_data.integrator.use_light_mis) {
     /* NOTE: if we make lights visible to camera rays, we'll need to initialize
      * these in the path_state_init. */
     const int last_type = INTEGRATOR_STATE(state, isect, type);
@@ -397,7 +397,7 @@ ccl_device void integrator_intersect_closest(KernelGlobals kg,
   }
 
   /* Write intersection result into global integrator state memory. */
-  integrator_state_write_isect(kg, state, &isect);
+  integrator_state_write_isect(state, &isect);
 
   /* Setup up next kernel to be executed. */
   integrator_intersect_next_kernel<DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST>(

@@ -1,9 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2006 Blender Foundation. All rights reserved. */
+ * Copyright 2006 Blender Foundation */
 
 /** \file
  * \ingroup cmpnodes
  */
+
+#include "BLT_translation.h"
 
 #include "COM_node_operation.hh"
 
@@ -35,6 +37,7 @@ class TextureOperation : public NodeOperation {
   {
     get_result("Value").allocate_invalid();
     get_result("Color").allocate_invalid();
+    context().set_info_message("Viewport compositor setup not fully supported");
   }
 };
 
@@ -55,6 +58,8 @@ void register_node_type_cmp_texture()
   ntype.declare = file_ns::cmp_node_texture_declare;
   ntype.flag |= NODE_PREVIEW;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.realtime_compositor_unsupported_message = N_(
+      "Node not supported in the Viewport compositor");
 
   nodeRegisterType(&ntype);
 }

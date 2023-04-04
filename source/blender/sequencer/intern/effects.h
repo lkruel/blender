@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2004 Blender Foundation. All rights reserved. */
+ * Copyright 2004 Blender Foundation */
 
 #pragma once
 
@@ -12,7 +12,6 @@ extern "C" {
 #endif
 
 struct Scene;
-struct SeqRenderData;
 struct Sequence;
 
 struct SeqEffectHandle seq_effect_get_sequence_blend(struct Sequence *seq);

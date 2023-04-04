@@ -26,9 +26,7 @@ using Alembic::AbcGeom::kVertexScope;
 using Alembic::AbcGeom::OPoints;
 using Alembic::AbcGeom::OPointsSchema;
 
-ABCPointsWriter::ABCPointsWriter(const ABCWriterConstructorArgs &args) : ABCAbstractWriter(args)
-{
-}
+ABCPointsWriter::ABCPointsWriter(const ABCWriterConstructorArgs &args) : ABCAbstractWriter(args) {}
 
 void ABCPointsWriter::create_alembic_objects(const HierarchyContext * /*context*/)
 {
@@ -85,7 +83,7 @@ void ABCPointsWriter::do_write(HierarchyContext &context)
   sim.ob = context.object;
   sim.psys = psys;
 
-  psys->lattice_deform_data = psys_create_lattice_deform_data(&sim);
+  psys_sim_data_init(&sim);
 
   uint64_t index = 0;
   for (int p = 0; p < psys->totpart; p++) {
@@ -113,10 +111,7 @@ void ABCPointsWriter::do_write(HierarchyContext &context)
     ids.push_back(index++);
   }
 
-  if (psys->lattice_deform_data) {
-    BKE_lattice_deform_data_destroy(psys->lattice_deform_data);
-    psys->lattice_deform_data = nullptr;
-  }
+  psys_sim_data_free(&sim);
 
   Alembic::Abc::P3fArraySample psample(points);
   Alembic::Abc::UInt64ArraySample idsample(ids);

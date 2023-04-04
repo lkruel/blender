@@ -32,7 +32,7 @@ static float shutter_curve_eval(float x, array<float> &shutter_curve)
     return 1.0f;
   }
 
-  x *= shutter_curve.size();
+  x = saturatef(x) * shutter_curve.size() - 1;
   int index = (int)x;
   float frac = x - index;
   if (index < shutter_curve.size() - 1) {
@@ -188,9 +188,7 @@ Camera::Camera() : Node(get_node_type())
   memset((void *)&kernel_camera, 0, sizeof(kernel_camera));
 }
 
-Camera::~Camera()
-{
-}
+Camera::~Camera() {}
 
 void Camera::compute_auto_viewplane()
 {

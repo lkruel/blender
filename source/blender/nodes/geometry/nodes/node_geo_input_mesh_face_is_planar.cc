@@ -1,9 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BLI_math_vector.hh"
+
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 
-#include "BKE_mesh.h"
+#include "BKE_mesh.hh"
 
 #include "node_geometry_util.hh"
 
@@ -37,11 +39,10 @@ class PlanarFieldInput final : public bke::MeshFieldInput {
                                  const eAttrDomain domain,
                                  IndexMask /*mask*/) const final
   {
-    const Span<MVert> verts = mesh.verts();
+    const Span<float3> positions = mesh.vert_positions();
     const Span<MPoly> polys = mesh.polys();
-    const Span<MLoop> loops = mesh.loops();
-    const Span<float3> poly_normals{
-        reinterpret_cast<const float3 *>(BKE_mesh_poly_normals_ensure(&mesh)), mesh.totpoly};
+    const Span<int> corner_verts = mesh.corner_verts();
+    const Span<float3> poly_normals = mesh.poly_normals();
 
     bke::MeshFieldContext context{mesh, ATTR_DOMAIN_FACE};
     fn::FieldEvaluator evaluator{context, polys.size()};
@@ -49,20 +50,19 @@ class PlanarFieldInput final : public bke::MeshFieldInput {
     evaluator.evaluate();
     const VArray<float> thresholds = evaluator.get_evaluated<float>(0);
 
-    auto planar_fn = [verts, polys, loops, thresholds, poly_normals](const int i) -> bool {
+    auto planar_fn =
+        [positions, polys, corner_verts, thresholds, poly_normals](const int i) -> bool {
       const MPoly &poly = polys[i];
       if (poly.totloop <= 3) {
         return true;
       }
-      const Span<MLoop> poly_loops = loops.slice(poly.loopstart, poly.totloop);
       const float3 &reference_normal = poly_normals[i];
 
       float min = FLT_MAX;
       float max = -FLT_MAX;
 
-      for (const int i_loop : poly_loops.index_range()) {
-        const float3 vert = verts[poly_loops[i_loop].v].co;
-        float dot = math::dot(reference_normal, vert);
+      for (const int vert : corner_verts.slice(poly.loopstart, poly.totloop)) {
+        float dot = math::dot(reference_normal, positions[vert]);
         if (dot > max) {
           max = dot;
         }
@@ -75,6 +75,11 @@ class PlanarFieldInput final : public bke::MeshFieldInput {
 
     return mesh.attributes().adapt_domain<bool>(
         VArray<bool>::ForFunc(polys.size(), planar_fn), ATTR_DOMAIN_FACE, domain);
+  }
+
+  void for_each_field_input_recursive(FunctionRef<void(const FieldInput &)> fn) const override
+  {
+    threshold_.node().for_each_field_input_recursive(fn);
   }
 
   uint64_t hash() const override

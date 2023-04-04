@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2008 Blender Foundation. All rights reserved. */
+ * Copyright 2008 Blender Foundation */
 
 /** \file
  * \ingroup spnode
@@ -121,6 +121,8 @@ void node_keymap(wmKeyConfig *keyconf)
 
   /* Main Region only ----------------- */
   WM_keymap_ensure(keyconf, "Node Editor", SPACE_NODE, 0);
+
+  node_link_modal_keymap(keyconf);
 }
 
 }  // namespace blender::ed::space_node

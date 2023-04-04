@@ -18,16 +18,15 @@
 
 #include "BLI_rect.h"
 
+#include "BKE_image_wrappers.hh"
+
 #include "DNA_image_types.h"
 
 extern "C" {
-struct PartialUpdateRegister;
 struct PartialUpdateUser;
 }
 
 namespace blender::bke::image {
-
-using TileNumber = int;
 
 namespace partial_update {
 
@@ -122,17 +121,11 @@ class AbstractTileData {
  */
 class NoTileData : AbstractTileData {
  public:
-  NoTileData(Image * /*image*/, ImageUser * /*image_user*/)
-  {
-  }
+  NoTileData(Image * /*image*/, ImageUser * /*image_user*/) {}
 
-  void init_data(TileNumber /*new_tile_number*/) override
-  {
-  }
+  void init_data(TileNumber /*new_tile_number*/) override {}
 
-  void free_data() override
-  {
-  }
+  void free_data() override {}
 };
 
 /**

@@ -64,10 +64,6 @@ void HdCyclesDisplayDriver::gl_context_create()
 #endif
 
   if (!gl_pbo_id_) {
-    if (glewInit() != GLEW_OK) {
-      return;
-    }
-
     glGenBuffers(1, &gl_pbo_id_);
   }
 }
@@ -116,9 +112,7 @@ void HdCyclesDisplayDriver::gl_context_dispose()
 #endif
 }
 
-void HdCyclesDisplayDriver::next_tile_begin()
-{
-}
+void HdCyclesDisplayDriver::next_tile_begin() {}
 
 bool HdCyclesDisplayDriver::update_begin(const Params &params,
                                          int texture_width,

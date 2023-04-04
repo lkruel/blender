@@ -1,4 +1,4 @@
-// Copyright 2013 Blender Foundation. All rights reserved.
+// Copyright 2013 Blender Foundation
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -15,20 +15,16 @@
 // Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
 #include "opensubdiv_capi.h"
-
+#include "opensubdiv/version.h"
 #ifdef _MSC_VER
 #  include <iso646.h>
 #endif
 
 #include "internal/base/util.h"
 
-void openSubdiv_init()
-{
-}
+void openSubdiv_init() {}
 
-void openSubdiv_cleanup()
-{
-}
+void openSubdiv_cleanup() {}
 
 int openSubdiv_getVersionHex()
 {

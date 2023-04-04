@@ -1,9 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. All rights reserved. */
+ * Copyright 2011 Blender Foundation */
 
 /** \file
  * \ingroup cmpnodes
  */
+
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_lib_id.h"
@@ -92,6 +94,7 @@ class MovieDistortionOperation : public NodeOperation {
   void execute() override
   {
     get_input("Image").pass_through(get_result("Image"));
+    context().set_info_message("Viewport compositor setup not fully supported");
   }
 };
 
@@ -115,6 +118,8 @@ void register_node_type_cmp_moviedistortion()
   ntype.initfunc_api = file_ns::init;
   node_type_storage(&ntype, nullptr, file_ns::storage_free, file_ns::storage_copy);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.realtime_compositor_unsupported_message = N_(
+      "Node not supported in the Viewport compositor");
 
   nodeRegisterType(&ntype);
 }

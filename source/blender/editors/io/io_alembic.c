@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2016 Blender Foundation. All rights reserved. */
+ * Copyright 2016 Blender Foundation */
 
 /** \file
  * \ingroup editor/io
@@ -633,7 +633,7 @@ static int wm_alembic_import_exec(bContext *C, wmOperator *op)
     }
   }
 
-  /* Switch out of edit mode to avoid being stuck in it (T54326). */
+  /* Switch out of edit mode to avoid being stuck in it (#54326). */
   Object *obedit = CTX_data_edit_object(C);
   if (obedit) {
     ED_object_mode_set(C, OB_MODE_OBJECT);

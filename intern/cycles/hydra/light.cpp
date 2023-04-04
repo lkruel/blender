@@ -29,9 +29,7 @@ HdCyclesLight::HdCyclesLight(const SdfPath &sprimId, const TfToken &lightType)
 {
 }
 
-HdCyclesLight::~HdCyclesLight()
-{
-}
+HdCyclesLight::~HdCyclesLight() {}
 
 HdDirtyBits HdCyclesLight::GetInitialDirtyBitsMask() const
 {
@@ -382,12 +380,12 @@ void HdCyclesLight::Initialize(HdRenderParam *renderParam)
   }
   else if (_lightType == HdPrimTypeTokens->diskLight) {
     _light->set_light_type(LIGHT_AREA);
-    _light->set_round(true);
+    _light->set_ellipse(true);
     _light->set_size(1.0f);
   }
   else if (_lightType == HdPrimTypeTokens->rectLight) {
     _light->set_light_type(LIGHT_AREA);
-    _light->set_round(false);
+    _light->set_ellipse(false);
     _light->set_size(1.0f);
   }
   else if (_lightType == HdPrimTypeTokens->sphereLight) {

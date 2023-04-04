@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2009 Blender Foundation. All rights reserved. */
+ * Copyright 2009 Blender Foundation */
 
 /** \file
  * \ingroup sptext
@@ -16,6 +16,10 @@ struct Text;
 struct TextLine;
 struct bContext;
 struct wmOperatorType;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* text_draw.c */
 
@@ -176,3 +180,7 @@ void TEXT_OT_autocomplete(struct wmOperatorType *ot);
 /* space_text.c */
 
 extern const char *text_context_dir[]; /* doc access */
+
+#ifdef __cplusplus
+}
+#endif

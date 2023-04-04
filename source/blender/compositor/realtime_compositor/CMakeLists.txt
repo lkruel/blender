@@ -6,6 +6,7 @@ set(INC
   cached_resources
   ../../blenkernel
   ../../blenlib
+  ../../blentranslation
   ../../gpu
   ../../imbuf
   ../../makesdna
@@ -16,6 +17,8 @@ set(INC
   ../../../../intern/guardedalloc
 )
 
+set(INC_SYS
+)
 
 set(SRC
   intern/compile_state.cc
@@ -60,15 +63,21 @@ set(SRC
   COM_utilities.hh
 
   algorithms/intern/algorithm_parallel_reduction.cc
+  algorithms/intern/smaa.cc
+  algorithms/intern/symmetric_separable_blur.cc
 
   algorithms/COM_algorithm_parallel_reduction.hh
+  algorithms/COM_algorithm_smaa.hh
+  algorithms/COM_algorithm_symmetric_separable_blur.hh
 
   cached_resources/intern/morphological_distance_feather_weights.cc
+  cached_resources/intern/smaa_precomputed_textures.cc
   cached_resources/intern/symmetric_blur_weights.cc
   cached_resources/intern/symmetric_separable_blur_weights.cc
 
   cached_resources/COM_cached_resource.hh
   cached_resources/COM_morphological_distance_feather_weights.hh
+  cached_resources/COM_smaa_precomputed_textures.hh
   cached_resources/COM_symmetric_blur_weights.hh
   cached_resources/COM_symmetric_separable_blur_weights.hh
 )
@@ -96,6 +105,16 @@ set(GLSL_SRC
   shaders/compositor_ellipse_mask.glsl
   shaders/compositor_filter.glsl
   shaders/compositor_flip.glsl
+  shaders/compositor_glare_ghost_accumulate.glsl
+  shaders/compositor_glare_ghost_base.glsl
+  shaders/compositor_glare_highlights.glsl
+  shaders/compositor_glare_mix.glsl
+  shaders/compositor_glare_simple_star_anti_diagonal_pass.glsl
+  shaders/compositor_glare_simple_star_diagonal_pass.glsl
+  shaders/compositor_glare_simple_star_horizontal_pass.glsl
+  shaders/compositor_glare_simple_star_vertical_pass.glsl
+  shaders/compositor_glare_streaks_accumulate.glsl
+  shaders/compositor_glare_streaks_filter.glsl
   shaders/compositor_image_crop.glsl
   shaders/compositor_morphological_distance.glsl
   shaders/compositor_morphological_distance_feather.glsl
@@ -104,14 +123,19 @@ set(GLSL_SRC
   shaders/compositor_normalize.glsl
   shaders/compositor_parallel_reduction.glsl
   shaders/compositor_projector_lens_distortion.glsl
+  shaders/compositor_read_pass.glsl
   shaders/compositor_realize_on_domain.glsl
   shaders/compositor_screen_lens_distortion.glsl
-  shaders/compositor_set_alpha.glsl
+  shaders/compositor_smaa_blending_weight_calculation.glsl
+  shaders/compositor_smaa_edge_detection.glsl
+  shaders/compositor_smaa_neighborhood_blending.glsl
   shaders/compositor_split_viewer.glsl
   shaders/compositor_symmetric_blur.glsl
+  shaders/compositor_symmetric_blur_variable_size.glsl
   shaders/compositor_symmetric_separable_blur.glsl
   shaders/compositor_tone_map_photoreceptor.glsl
   shaders/compositor_tone_map_simple.glsl
+  shaders/compositor_write_output.glsl
 
   shaders/library/gpu_shader_compositor_alpha_over.glsl
   shaders/library/gpu_shader_compositor_blur_common.glsl
@@ -129,6 +153,7 @@ set(GLSL_SRC
   shaders/library/gpu_shader_compositor_gamma.glsl
   shaders/library/gpu_shader_compositor_hue_correct.glsl
   shaders/library/gpu_shader_compositor_hue_saturation_value.glsl
+  shaders/library/gpu_shader_compositor_image_diagonals.glsl
   shaders/library/gpu_shader_compositor_invert.glsl
   shaders/library/gpu_shader_compositor_luminance_matte.glsl
   shaders/library/gpu_shader_compositor_main.glsl
@@ -181,6 +206,7 @@ set(SRC_SHADER_CREATE_INFOS
   shaders/infos/compositor_ellipse_mask_info.hh
   shaders/infos/compositor_filter_info.hh
   shaders/infos/compositor_flip_info.hh
+  shaders/infos/compositor_glare_info.hh
   shaders/infos/compositor_image_crop_info.hh
   shaders/infos/compositor_morphological_distance_feather_info.hh
   shaders/infos/compositor_morphological_distance_info.hh
@@ -189,14 +215,17 @@ set(SRC_SHADER_CREATE_INFOS
   shaders/infos/compositor_normalize_info.hh
   shaders/infos/compositor_parallel_reduction_info.hh
   shaders/infos/compositor_projector_lens_distortion_info.hh
+  shaders/infos/compositor_read_pass_info.hh
   shaders/infos/compositor_realize_on_domain_info.hh
   shaders/infos/compositor_screen_lens_distortion_info.hh
-  shaders/infos/compositor_set_alpha_info.hh
+  shaders/infos/compositor_smaa_info.hh
   shaders/infos/compositor_split_viewer_info.hh
   shaders/infos/compositor_symmetric_blur_info.hh
+  shaders/infos/compositor_symmetric_blur_variable_size_info.hh
   shaders/infos/compositor_symmetric_separable_blur_info.hh
   shaders/infos/compositor_tone_map_photoreceptor_info.hh
   shaders/infos/compositor_tone_map_simple_info.hh
+  shaders/infos/compositor_write_output_info.hh
 )
 
 set(SHADER_CREATE_INFOS_CONTENT "")

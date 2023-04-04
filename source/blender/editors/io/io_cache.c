@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2016 Blender Foundation. All rights reserved. */
+ * Copyright 2016 Blender Foundation */
 
 /** \file
  * \ingroup editor/io
@@ -247,7 +247,7 @@ static int cachefile_layer_remove_exec(bContext *C, wmOperator *UNUSED(op))
 void CACHEFILE_OT_layer_remove(wmOperatorType *ot)
 {
   ot->name = "Add layer";
-  ot->description = "Remove an override layer to the archive";
+  ot->description = "Remove an override layer from the archive";
   ot->idname = "CACHEFILE_OT_layer_remove";
 
   /* api callbacks */

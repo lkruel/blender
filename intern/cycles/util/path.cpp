@@ -2,8 +2,11 @@
  * Copyright 2011-2022 Blender Foundation */
 
 #include "util/path.h"
+#include "util/algorithm.h"
+#include "util/map.h"
 #include "util/md5.h"
 #include "util/string.h"
+#include "util/vector.h"
 
 #include <OpenImageIO/filesystem.h>
 #include <OpenImageIO/strutil.h>
@@ -77,9 +80,7 @@ class directory_iterator {
     const WIN32_FIND_DATAW &find_data_;
   };
 
-  directory_iterator() : path_info_("", find_data_), h_find_(INVALID_HANDLE_VALUE)
-  {
-  }
+  directory_iterator() : path_info_("", find_data_), h_find_(INVALID_HANDLE_VALUE) {}
 
   explicit directory_iterator(const string &path) : path_(path), path_info_(path, find_data_)
   {
@@ -160,9 +161,7 @@ class directory_iterator {
  public:
   class path_info {
    public:
-    explicit path_info(const string &path) : path_(path), entry_(NULL)
-    {
-    }
+    explicit path_info(const string &path) : path_(path), entry_(NULL) {}
 
     string path()
     {
@@ -179,9 +178,7 @@ class directory_iterator {
     const struct dirent *entry_;
   };
 
-  directory_iterator() : path_info_(""), name_list_(NULL), num_entries_(-1), cur_entry_(-1)
-  {
-  }
+  directory_iterator() : path_info_(""), name_list_(NULL), num_entries_(-1), cur_entry_(-1) {}
 
   explicit directory_iterator(const string &path) : path_(path), path_info_(path_), cur_entry_(0)
   {
@@ -898,19 +895,54 @@ FILE *path_fopen(const string &path, const string &mode)
 #endif
 }
 
-void path_cache_clear_except(const string &name, const set<string> &except)
+/* LRU Cache for Kernels */
+
+static void path_cache_kernel_mark_used(const string &path)
 {
-  string dir = path_user_get("cache");
+  std::time_t current_time = std::time(nullptr);
+  OIIO::Filesystem::last_write_time(path, current_time);
+}
 
-  if (path_exists(dir)) {
-    directory_iterator it(dir), it_end;
+bool path_cache_kernel_exists_and_mark_used(const string &path)
+{
+  if (path_exists(path)) {
+    path_cache_kernel_mark_used(path);
+    return true;
+  }
+  else {
+    return false;
+  }
+}
 
-    for (; it != it_end; ++it) {
-      string filename = path_filename(it->path());
+void path_cache_kernel_mark_added_and_clear_old(const string &new_path,
+                                                const size_t max_old_kernel_of_same_type)
+{
+  path_cache_kernel_mark_used(new_path);
 
-      if (string_startswith(filename, name.c_str()))
-        if (except.find(filename) == except.end())
-          path_remove(it->path());
+  string dir = path_dirname(new_path);
+  if (!path_exists(dir)) {
+    return;
+  }
+
+  /* Remove older kernels within the same directory. */
+  directory_iterator it(dir), it_end;
+  vector<pair<std::time_t, string>> same_kernel_types;
+
+  for (; it != it_end; ++it) {
+    const string &path = it->path();
+    if (path == new_path) {
+      continue;
+    }
+
+    std::time_t last_time = OIIO::Filesystem::last_write_time(path);
+    same_kernel_types.emplace_back(last_time, path);
+  }
+
+  if (same_kernel_types.size() > max_old_kernel_of_same_type) {
+    sort(same_kernel_types.begin(), same_kernel_types.end());
+
+    for (int i = 0; i < same_kernel_types.size() - max_old_kernel_of_same_type; i++) {
+      path_remove(same_kernel_types[i].second);
     }
   }
 }

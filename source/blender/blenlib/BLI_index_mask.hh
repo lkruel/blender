@@ -52,9 +52,7 @@ class IndexMask {
    * Use this method when you know that no indices are skipped. It is more efficient than preparing
    * an integer array all the time.
    */
-  IndexMask(IndexRange range) : indices_(range.as_span())
-  {
-  }
+  IndexMask(IndexRange range) : indices_(range.as_span()) {}
 
   /**
    * Construct an IndexMask from a sorted list of indices. Note, the created IndexMask is only
@@ -66,16 +64,12 @@ class IndexMask {
    * Do this:
    *   do_something_with_an_index_mask({3, 4, 5});
    */
-  IndexMask(const std::initializer_list<int64_t> &indices) : IndexMask(Span<int64_t>(indices))
-  {
-  }
+  IndexMask(const std::initializer_list<int64_t> &indices) : IndexMask(Span<int64_t>(indices)) {}
 
   /**
    * Creates an IndexMask that references the indices [0, n-1].
    */
-  explicit IndexMask(int64_t n) : IndexMask(IndexRange(n))
-  {
-  }
+  explicit IndexMask(int64_t n) : IndexMask(IndexRange(n)) {}
 
   /** Checks that the indices are non-negative and in ascending order. */
   static bool indices_are_valid_index_mask(Span<int64_t> indices)
@@ -234,8 +228,18 @@ class IndexMask {
     return indices_.first() >= range.first() && indices_.last() <= range.last();
   }
 
-  IndexMask slice(int64_t start, int64_t size) const;
-  IndexMask slice(IndexRange slice) const;
+  IndexMask slice(const int64_t start, const int64_t size) const
+  {
+    return IndexMask(indices_.slice(start, size));
+  }
+
+  IndexMask slice(const IndexRange slice) const
+  {
+    return IndexMask(indices_.slice(slice));
+  }
+
+  IndexMask slice_safe(int64_t start, int64_t size) const;
+  IndexMask slice_safe(IndexRange slice) const;
   /**
    * Create a sub-mask that is also shifted to the beginning.
    * The shifting to the beginning allows code to work with smaller indices,
@@ -279,6 +283,24 @@ class IndexMask {
    */
   Vector<IndexRange> extract_ranges_invert(const IndexRange full_range,
                                            Vector<int64_t> *r_skip_amounts = nullptr) const;
+};
+
+/** To be used with #call_with_devirtualized_parameters. */
+template<bool UseRange, bool UseSpan> struct IndexMaskDevirtualizer {
+  const IndexMask &mask;
+
+  template<typename Fn> bool devirtualize(const Fn &fn) const
+  {
+    if constexpr (UseRange) {
+      if (this->mask.is_range()) {
+        return fn(this->mask.as_range());
+      }
+    }
+    if constexpr (UseSpan) {
+      return fn(this->mask.indices());
+    }
+    return false;
+  }
 };
 
 }  // namespace blender

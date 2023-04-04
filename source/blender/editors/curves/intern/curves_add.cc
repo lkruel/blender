@@ -23,15 +23,13 @@ namespace blender::ed::curves {
 
 static bool has_surface_deformation_node(const bNodeTree &ntree)
 {
-  LISTBASE_FOREACH (const bNode *, node, &ntree.nodes) {
-    if (node->type == GEO_NODE_DEFORM_CURVES_ON_SURFACE) {
-      return true;
-    }
-    if (node->type == NODE_GROUP) {
-      if (node->id != nullptr) {
-        if (has_surface_deformation_node(*reinterpret_cast<const bNodeTree *>(node->id))) {
-          return true;
-        }
+  if (!ntree.nodes_by_type("GeometryNodeDeformCurvesOnSurface").is_empty()) {
+    return true;
+  }
+  for (const bNode *node : ntree.group_nodes()) {
+    if (const bNodeTree *sub_tree = reinterpret_cast<const bNodeTree *>(node->id)) {
+      if (has_surface_deformation_node(*sub_tree)) {
+        return true;
       }
     }
   }
@@ -112,8 +110,9 @@ bke::CurvesGeometry primitive_random_sphere(const int curves_size, const int poi
 
   RandomNumberGenerator rng;
 
+  const OffsetIndices points_by_curve = curves.points_by_curve();
   for (const int i : curves.curves_range()) {
-    const IndexRange points = curves.points_for_curve(i);
+    const IndexRange points = points_by_curve[i];
     MutableSpan<float3> curve_positions = positions.slice(points);
     MutableSpan<float> curve_radii = radius.span.slice(points);
 
